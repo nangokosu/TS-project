@@ -1,0 +1,261 @@
+---
+title: "Final Project"
+author: "Felipe Delclaux"
+date: "11/22/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library( astsa )
+
+library( sqldf )
+
+library( stringr )
+
+library( dynlm )
+```
+
+## Data exploration
+
+Setwd
+```{r}
+setwd('C:/Users/fdelclaux/OneDrive/Documents/Georgetown/Semesters/Fall2021/MATH345/Final Project')
+```
+
+Independent Variables
+
+```{r}
+housing_index <- read.csv('CIH.csv')
+
+housing_index$DATE <- as.Date(housing_index$DATE, format = '%Y-%m-%d')
+
+housing_index <- housing_index[housing_index$DATE > '1970-01-01',]
+
+names(housing_index)[2] <- "housing_index"
+
+scatter.smooth(housing_index$DATE, housing_index$housing_index)
+
+tsplot(diff(housing_index$housing_index))
+
+transformed_housing_index <- diff(log(housing_index$housing_index))
+
+
+
+```
+
+```{r}
+median_house_price <- read.csv('MHP.csv')
+
+median_house_price$DATE <- as.Date(median_house_price$DATE, format = '%Y-%m-%d')
+
+median_house_price <- median_house_price[median_house_price$DATE > '1970-01-01',]
+
+names(median_house_price)[2] <- "median_house_price"
+
+scatter.smooth(median_house_price$DATE, median_house_price$median_house_price, span =1/8)
+
+tsplot(diff((median_house_price$median_house_price)))
+
+tsplot(diff(log(median_house_price$median_house_price)))
+
+transformed_median_house_price <- diff(log(median_house_price$median_house_price))
+
+
+
+
+```
+
+```{r}
+used_cars_index <- read.csv('CIUC.csv')
+
+used_cars_index$DATE <- as.Date(used_cars_index$DATE, format = '%Y-%m-%d')
+
+used_cars_index <- used_cars_index[used_cars_index$DATE > '1970-01-01',]
+
+names(used_cars_index)[2] <- "used_cars_price"
+
+scatter.smooth(used_cars_index$DATE, used_cars_index$used_cars_price, span = 1/8)
+
+tsplot(used_cars_index$used_cars_price)
+
+tsplot(diff(log(used_cars_index$used_cars_price)))
+
+transformed_used_cars_index <- diff(log(used_cars_index$used_cars_price))
+
+```
+
+
+CPI
+
+```{r}
+
+
+cpi <- read.csv('CPI.csv', header = TRUE)
+
+cpi$DATE <- as.Date(cpi$DATE, format = '%Y-%m-%d')
+
+cpi <- cpi[cpi$DATE > '1970-01-01',]
+
+names(cpi)[2] <- "CPI"
+
+scatter.smooth(cpi$DATE, cpi$CPI, span = 1/4)
+
+tsplot( cpi$CPI )
+tsplot( diff(cpi$CPI) )
+tsplot( diff(log(cpi$CPI) ) )
+transformed_cpi <- diff(log(cpi$CPI))
+
+```
+
+```{r}
+cpi_vs_housing_index <- merge(cpi, housing_index, by = "DATE")
+
+tsplot(cpi_vs_housing_index$CPI)
+lines(cpi_vs_housing_index$housing_index)
+
+tsplot((diff(cpi_vs_housing_index$CPI)))
+lines((diff(cpi_vs_housing_index$housing_index)), col = 'red')
+
+Fit <- lm (diff(cpi_vs_housing_index$CPI) ~ diff(cpi_vs_housing_index$housing_index))
+
+tsplot(diff(cpi_vs_housing_index$CPI))
+lines(Fit$fitted.values, col = 'red')
+
+tsplot(diff(log(cpi_vs_housing_index$CPI)))
+lines(diff(log(cpi_vs_housing_index$housing_index)), col = 'red')
+
+Fit <- lm (diff(log(cpi_vs_housing_index$CPI)) ~ diff(log(cpi_vs_housing_index$housing_index)))
+
+summary(Fit)
+
+plot(Fit$residuals)
+
+tsplot(diff(log(cpi_vs_housing_index$housing_index)))
+lines(Fit$fitted.values, col = 'red')
+
+```
+
+PPI
+
+```{r}
+ppi <- read.csv('PPI.csv')
+
+ppi$DATE <- as.Date(ppi$DATE, format = '%Y-%m-%d')
+
+ppi <- ppi[ppi$DATE > '1970-01-01',]
+
+names(ppi)[2] <- "PPI"
+
+tsplot(ppi$PPI)
+
+tsplot(diff(ppi$PPI))
+tsplot(diff(log(ppi$PPI)))
+transformed_ppi <- diff(log(ppi$PPI))
+
+
+```
+
+
+
+```{r}
+
+merged_df <- merge(cpi, housing_index, by = "DATE")
+merged_df <- merge(merged_df, used_cars_index, by="DATE")
+
+pairs(merged_df)
+
+colour <- c(rgb(0.1,0.2,0.3), rgb(0.3,0.6,0.9), rgb(0.3,0.6,0.3))
+
+tsplot(merged_df$CPI, col = colour[1])
+lines(merged_df$housing_index, col = colour[2])
+lines(merged_df$used_cars_price, col = colour[3])
+
+Fit <- lm(merged_df$CPI ~ merged_df$DATE + merged_df$housing_index + merged_df$used_cars_price)
+
+summary(Fit)
+
+tsplot(Fit$fitted.values)
+
+plot(Fit$residuals)
+
+```
+
+```{r}
+
+colour <- c(rgb(0.1,0.2,0.3), rgb(0.3,0.6,0.9), rgb(0.3,0.6,0.3))
+
+tsplot(transformed_used_cars_index, col = colour[1] )
+lines(transformed_cpi, col = colour[2] )
+lines(transformed_housing_index, col = colour[3] )
+
+transformed_df <- data.frame(transformed_user_cars_index, transformed_cpi, transformed_housing_index)
+
+pairs(transformed_df)
+
+cor(transformed_df)
+
+Fit <- lm(transformed_cpi ~ transformed_housing_index + transformed_used_cars_index)
+
+
+summary(Fit)
+
+acf(Fit$residuals)
+
+plot(Fit$residuals)
+
+
+```
+```{r}
+
+merged_df <- merge(ppi, housing_index, by = "DATE")
+merged_df <- merge(merged_df, used_cars_index, by="DATE")
+
+pairs(merged_df)
+
+colour <- c(rgb(0.1,0.2,0.3), rgb(0.3,0.6,0.9), rgb(0.3,0.6,0.3))
+
+tsplot(merged_df$used_cars_price, col = colour[3])
+lines(merged_df$PPI, col = colour[1])
+lines(merged_df$housing_index, col = colour[2])
+
+Fit <- lm(merged_df$PPI ~ merged_df$DATE + merged_df$housing_index + merged_df$used_cars_price)
+
+summary(Fit)
+
+tsplot(Fit$fitted.values)
+lines(merged_df$PPI)
+
+plot(Fit$residuals)
+
+```
+
+
+```{r}
+
+colour <- c(rgb(0.1,0.2,0.3), rgb(0.3,0.6,0.9), rgb(0.3,0.6,0.3))
+
+tsplot(transformed_used_cars_index, col = colour[1] )
+lines(transformed_ppi, col = colour[2] )
+lines(transformed_housing_index, col = colour[3] )
+
+transformed_df <- data.frame(transformed_used_cars_index[-1], transformed_housing_index[-1], transformed_ppi)
+
+pairs(transformed_df)
+
+cor(transformed_df)
+
+Fit <- lm(transformed_df$transformed_ppi ~ transformed_df$transformed_housing_index + transformed_df$transformed_used_cars_index, )
+
+summary(Fit)
+
+tsplot(transformed_df$transformed_ppi)
+lines(transformed_df$transformed_ppi, col = 'red')
+
+plot(Fit$residuals)
+
+acf(Fit$residuals)
+
+
+```
