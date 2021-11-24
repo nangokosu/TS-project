@@ -1,0 +1,39 @@
+---
+title: "FRED inflation"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=F,warning=F)
+```
+
+
+## Extracting the data from FRED:
+
+```{r cars}
+library(quantmod)
+cpi=getSymbols('CPIAUCSL',src='FRED',auto.assign=F)
+ppi=getSymbols('PITGCG01USM661N',src='FRED',auto.assign=F)
+energy=getSymbols('PNRGINDEXM',src='FRED',auto.assign=F)
+food=getSymbols('PFOODINDEXM',src='FRED',auto.assign=F)
+used_cars=getSymbols('CUSR0000SETA02',src='FRED',auto.assign=F)
+govt_spending=getSymbols('G160371A027NBEA',src='FRED',auto.assign=F)
+personal_savings_rate=getSymbols('PSAVERT',src='FRED',auto.assign=F) # in percent
+```
+
+## Merging:
+
+```{r pressure, echo=FALSE}
+list_ts=list(cpi,ppi,energy,food,used_cars,govt_spending,personal_savings_rate)
+final_xts=do.call(merge,list_ts)
+# Final object omitting all NA variables due to lack of historical data
+final_xts=na.omit(final_xts)
+```
+
+## EDA:
+
+```{r}
+
+```
+
+
