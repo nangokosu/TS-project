@@ -120,6 +120,78 @@ single_lag_PPI_Food_Energy=lm(diff_log_PPI~diff_log_Energy+diff_log_Food,data=fi
 double_lag_PPI_Food_Energy=lm(diff_log_PPI~diff_log_Energy+lag_diff_log_Energy+diff_log_Food+lag_diff_log_Food,data=final_ts_df)
 ```
 
+Model Building - CPI vs Housing and Used Cars
+
+```{r}
+final_ts_df['log_Housing'] = log(final_ts_df$Housing_prices)
+final_ts_df['diff_log_Housing'] = difference(final_ts_df$log_Housing)
+final_ts_df['lag_diff_log_Housing'] = lag(final_ts_df$diff_log_Housing)
+final_ts_df['log_Used_Cars'] = log(final_ts_df$Used_cars)
+final_ts_df['diff_log_Used_Cars'] = difference(final_ts_df$log_Used_Cars)
+final_ts_df['lag_diff_log_Used_Cars'] = lag(final_ts_df$diff_log_Used_Cars)
+
+CPI_Hosuing_Used_Cars <- lm ( diff_log_CPI ~ diff_log_Housing + diff_log_Used_Cars , data = final_ts_df)
+lag_CPI_Hosuing_Used_Cars <- lm ( diff_log_CPI ~ diff_log_Housing + lag_diff_log_Housing + diff_log_Used_Cars + lag_diff_log_Used_Cars, data = final_ts_df)
+
+```
+
+Model Evaluation - CPI vs Housing and Used Cars
+
+```{r}
+
+summary(CPI_Hosuing_Used_Cars)
+
+plot(CPI_Hosuing_Used_Cars$residuals)
+
+acf(CPI_Hosuing_Used_Cars$residuals)
+
+```
+
+1 lag
+```{r}
+summary(lag_CPI_Hosuing_Used_Cars)
+
+plot(lag_CPI_Hosuing_Used_Cars$residuals)
+
+acf(lag_CPI_Hosuing_Used_Cars$residuals)
+
+linearHypothesis(lag_CPI_Hosuing_Used_Cars,c("lag_diff_log_Housing=0", "lag_diff_log_Used_Cars=0"),vcov=vcovHAC)
+
+```
+
+Model Building - PPi vs Housing and Used Cars
+
+```{r}
+
+PPI_Hosuing_Used_Cars <- lm ( diff_log_PPI ~ diff_log_Housing + diff_log_Used_Cars , data = final_ts_df)
+
+lag_PPI_Hosuing_Used_Cars <- lm ( diff_log_PPI ~ diff_log_Housing + lag_diff_log_Housing + diff_log_Used_Cars + lag_diff_log_Used_Cars, data = final_ts_df)
+
+```
+
+Model Evaluation - PPI vs Housing and Used Cars
+```{r}
+summary(PPI_Hosuing_Used_Cars)
+
+plot(PPI_Hosuing_Used_Cars$residuals)
+
+acf(PPI_Hosuing_Used_Cars$residuals)
+
+```
+
+1 lag
+```{r}
+
+summary(lag_PPI_Hosuing_Used_Cars)
+
+plot(lag_PPI_Hosuing_Used_Cars$residuals)
+
+acf(lag_PPI_Hosuing_Used_Cars$residuals)
+
+linearHypothesis(lag_PPI_Hosuing_Used_Cars,c("lag_diff_log_Housing=0", "lag_diff_log_Used_Cars=0"),vcov=vcovHAC)
+
+```
+
 ## Model examination
 
 To compare models using no lags for each variable against models using 1 lag for each variable, we look at three things:
