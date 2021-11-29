@@ -90,7 +90,7 @@ ggplot(data=NULL,aes(x=final_ts_df$Date[-1]))+
   labs(colour="Index series")+ggtitle("Index series from 1992-01-01")
 ```
 
-## Checking for stationarity and persistence after first differencing:
+## Checking for stationarity and persistence after first differencing of log variables:
 
 ```{r,fig.height=10}
 par(mfrow=c(3,3))
@@ -101,6 +101,8 @@ acf(diff(log(final_ts_df$Used_cars)),main="ACF for Used cars")
 acf(diff(log(final_ts_df$PPI)),main="ACF for PPI")
 acf(diff(log(final_ts_df$CPI)),main="ACF for CPI")
 ```
+
+After first differencing, most variables still exhibit AR(1) autocorrelation, with the exception of housing, which exhibits cyclicality in its ACF.
 
 ## Model fitting
 ```{r}
@@ -160,5 +162,5 @@ acf(resid(double_lag_PPI_Food_Energy),main="Double lag")
 ```{r}
 linearHypothesis(double_lag_PPI_Food_Energy,c("lag_diff_log_Energy=0","lag_diff_log_Food=0"),vcov=vcovHAC)
 ```
-
+ For both CPI and PPI, we see that using up to the first lag of the first difference of the logged variable yields a better fit model than not using such lags.
 
