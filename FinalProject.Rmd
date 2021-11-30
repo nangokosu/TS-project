@@ -1,0 +1,229 @@
+---
+title: "TSFinal"
+author: "Christian Ortiz"
+date: "11/29/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load Libraries
+
+
+```{r}
+library( astsa )
+library( sqldf )
+library( stringr )
+library( dynlm )
+library( tidyverse )
+library( lubridate )
+library( tseries )
+library( forecast )
+```
+
+
+## Load Data
+
+```{r}
+PPI <- read.csv("PPI.csv")
+
+CPI <- read.csv("CPI.csv")
+
+Electricity <- read.csv("Electricity.csv")
+
+Unemployment <- read.csv("Unemployment.csv")
+
+```
+
+
+## Data Wrangling
+
+```{r}
+# To Date 
+
+CPI$DATE <- as.Date(CPI$DATE, format = '%Y-%m-%d')
+
+PPI$DATE <- as.Date(PPI$DATE, format = '%Y-%m-%d')
+
+Electricity$DATE <- as.Date(Electricity$DATE, format = '%Y-%m-%d')
+
+Unemployment$DATE <- as.Date(Unemployment$DATE, format = '%Y-%m-%d')
+
+
+# Filter for 1970 Onwards
+
+CPI <- filter(CPI, DATE > '1970-01-01')
+
+PPI <- filter(PPI, DATE > '1970-01-01')
+
+Electricity <- filter(Electricity, DATE > '1970-01-01')
+
+Unemployment <- filter(Unemployment, DATE > '1970-01-01')
+
+# Renaming
+
+colnames(PPI)[2] <-  "PPI"
+
+colnames(CPI)[2] <- "CPI"
+
+colnames(Electricity)[2] <- "Electricity_Prices"
+
+colnames(Unemployment)[2] <- "Unemployment_Rate"
+
+# Change Electricity Type to Numeric
+
+Electricity$Electricity_Prices <- as.numeric(Electricity$Electricity_Prices)
+
+# Joining Data Frames by DATE
+
+df <- inner_join(PPI, CPI,  by = "DATE")
+df <- inner_join(df, Electricity, by = "DATE")
+df <- inner_join(df, Unemployment, by = "DATE")
+
+```
+
+
+
+## EDA
+
+
+```{r}
+tsplot(df$CPI)
+tsplot(df$PPI)
+tsplot(df$Electricity)
+tsplot(df$Unemployment)
+```
+
+
+
+```{r}
+tsplot(diff(df$CPI))
+tsplot(diff(df$PPI))
+tsplot(diff(df$Electricity))
+tsplot(diff(df$Unemployment))
+```
+
+Hmm. It seems that theres weird years for Electricity (t = ~85) & Unemployment (t = ~495 - likely COVID).
+Other than the odd time points mentioned above, differencing would seem to make them stationary.
+
+Now, for PPI and CPI, even after differencing, it seems that the variance condition of stationarity would be violated.
+
+```{r}
+tsplot(log(df$CPI))
+tsplot(log(df$PPI))
+tsplot(log(df$Electricity))
+tsplot(log(df$Unemployment))
+```
+Differencing for Unemployment & Electricity seem to suffice to create visual Stationarity.
+However, logging then differencing for CPI and PPI might be the better move.
+
+
+
+```{r}
+tsplot(diff(log(df$CPI)))
+tsplot(diff(log(df$PPI)))
+```
+For above transformations of logging then differencing CPI and PPI, it seems that these transformations
+bring the series closer to stationarity, but there are still a few points with a high degree of variation.
+
+
+Numerically testing for stationarity post transformations below.
+
+```{r}
+adf.test(diff(df$Electricity))
+
+adf.test(diff(df$Unemployment_Rate))
+
+adf.test(diff(log(df$CPI)))
+
+adf.test(diff(log(df$PPI)))
+
+```
+
+adf tests suggest that above transformations meet stationarity.
+
+Creating dataframe with transformed variables below.
+
+```{r}
+transformed_CPI <- diff(log(df$CPI))
+transformed_PPI <- diff(log(df$PPI))
+transformed_Electricity <- diff(log(df$Electricity_Prices))
+transformed_Unemploymnent <- diff(df$Unemployment_Rate)
+DATE <- df$DATE[-1]
+
+transformed_df <- as.data.frame(cbind(DATE,transformed_PPI, transformed_CPI, 
+                                      transformed_Electricity, transformed_Unemploymnent))
+colnames(transformed_df) <- colnames(df)
+```
+
+checking acf below.
+```{r}
+acf(transformed_df$PPI)
+acf(transformed_df$CPI)
+acf(transformed_df$Electricity_Prices)
+acf(transformed_df$Unemployment_Rate)
+```
+
+
+
+## CPI Modelling
+
+
+```{r}
+cpi_electricity.lm <- lm(CPI ~ Electricity_Prices, data = transformed_df)
+summary(cpi_electricity.lm)
+plot(cpi_electricity.lm)
+checkresiduals(cpi_electricity.lm)
+```
+There seem to be 2 influential observations that are likely influencing parameters heavily.
+Residual diagnostic suggests that OLS and ACF assumptions for regression don't hold, correlated residuals. 
+F-statistic (p-val = 0.488) & R-Squared =  0.005623 suggests that might not be a good fit. 
+
+
+```{r}
+cpi_unemployment.lm <- lm(CPI ~ Unemployment_Rate, data = transformed_df)
+summary(cpi_unemployment.lm)
+plot(cpi_unemployment.lm)
+checkresiduals(cpi_unemployment.lm)
+```
+
+1 Influential Observation.
+F-statistic:  9.02,  p-value: 0.002801
+Residual diagnostic suggests that residuals might be correlated. 
+
+
+## PPI Modelling
+
+
+```{r}
+ppi_electricity.lm <- lm(PPI ~ Electricity_Prices, data = transformed_df)
+summary(ppi_electricity.lm)
+plot(ppi_electricity.lm)
+checkresiduals(ppi_electricity.lm)
+```
+Same influential observations as CPI ~ Electricity. 
+F-statistic: 7.498,  p-value: 0.00639, suggests good fit. 
+Not sure that assumptions hold here.
+
+
+```{r}
+ppi_unemployment.lm <- lm(PPI ~ Unemployment_Rate, data = transformed_df)
+summary(ppi_unemployment.lm)
+plot(ppi_unemployment.lm)
+checkresiduals(ppi_unemployment.lm)
+```
+
+1 influential observation. Same as CPI ~ Unemployment. 
+F-statistic: 33.56,  p-value: 1.209e-08, suggests good fit.
+Not sure about how residual diagnostic holds up here.
+
+
+
+
+
+
+
+
+
