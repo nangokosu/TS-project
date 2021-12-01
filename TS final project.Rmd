@@ -146,7 +146,6 @@ summary(CPI_Hosuing_Used_Cars)
 plot(CPI_Hosuing_Used_Cars$residuals)
 
 acf(CPI_Hosuing_Used_Cars$residuals)
-
 ```
 
 1 lag
@@ -234,5 +233,13 @@ acf(resid(double_lag_PPI_Food_Energy),main="Double lag")
 ```{r}
 linearHypothesis(double_lag_PPI_Food_Energy,c("lag_diff_log_Energy=0","lag_diff_log_Food=0"),vcov=vcovHAC)
 ```
- For both CPI and PPI, we see that using up to the first lag of the first difference of the logged variable yields a better fit model than not using such lags.
+
+For both CPI and PPI, we see that using up to the first lag of the first difference of the logged variable yields a better fit model than not using such lags.
+
+## Model selection:
+
+```{r}
+
+```
+
 
