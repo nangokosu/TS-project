@@ -1,0 +1,322 @@
+---
+title: "FRED inflation"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=F,warning=F,fig.width=10)
+```
+
+
+## Necessary packages 
+
+```{r}
+library(quantmod) # Extracting data
+library(tsibble)
+library(tidyverse)
+library(ggplot2)
+library(scales)
+library(aTSA)
+library(dynlm)
+library(car)
+library(sandwich)
+```
+
+## Extracting the data from FRED:
+
+This code chunk below uses the quantmod package to get FRED data via its API.
+
+```{r cars}
+cpi=getSymbols('CPIAUCSL',src='FRED',auto.assign=F)['1992-01-01/']
+cpi=cpi/cpi[[1]]*100
+ppi=getSymbols('PITGCG01USM661N',src='FRED',auto.assign=F)['1992-01-01/']
+ppi=ppi/ppi[[1]]*100
+energy=getSymbols('PNRGINDEXM',src='FRED',auto.assign=F)['1992-01-01/']
+energy=energy/energy[[1]]*100
+food=getSymbols('PFOODINDEXM',src='FRED',auto.assign=F)['1992-01-01/']
+food=food/food[[1]]*100
+used_cars=getSymbols('CUSR0000SETA02',src='FRED',auto.assign=F)['1992-01-01/']
+used_cars=used_cars/used_cars[[1]]*100
+# I think you should turn govt_spending into an index using Jan 1992 as base. That way, it fits with how everything else is also currently an index.
+
+housing=getSymbols('CPIHOSNS',src='FRED',auto.assign=F)['1992-01-01/']
+housing=housing/housing[[1]]*100
+govt_spending=getSymbols('G160371A027NBEA',src='FRED',auto.assign=F)['1992-01-01/']
+#govt_spending=govt_spending/govt_spending[[1]]*100
+personal_savings_rate=getSymbols('PSAVERT',src='FRED',auto.assign=F)['1992-01-01/'] # in percent
+#personal_savings_rate=personal_savings_rate/personal_savings_rate[[1]]*100
+
+
+# I don't know that these necessarily need to be indexed. - Christian
+Unemployment=getSymbols('UNRATE',src='FRED',auto.assign=F)['1992-01-01/']
+
+Electricty_avg=getSymbols('APU000072610',src='FRED',auto.assign=F)['1992-01-01/']
+
+
+```
+
+## Merging:
+
+This code chunk merges the individual extracted xts series into one object
+```{r pressure, echo=FALSE}
+list_ts=list(cpi,ppi,energy,food,used_cars,govt_spending,personal_savings_rate,housing, Unemployment, Electricty_avg)
+final_xts=do.call(merge,list_ts)
+# Final object omitting all NA variables due to lack of historical data
+final_xts=na.approx(final_xts)
+final_xts=na.locf(final_xts)
+final_ts_df=final_xts%>%fortify.zoo()%>%as_tsibble()
+colnames(final_ts_df)=c("Date","CPI","PPI","Energy","Food","Used_cars","Govt_spending","Personal_savings","Housing_prices", "Unemployment_Rate", "AvgElectricityPrices")
+colnames(final_xts)=c("CPI","PPI","Energy","Food","Used_cars","Govt_spending","Personal_savings","Housing_prices", "Unemployment_Rate", "AvgElectricityPrices")
+```
+
+
+## EDA:
+For all indices
+```{r}
+ggplot(final_ts_df,aes(x=Date))+
+  geom_line(aes(y=PPI,color="PPI"))+
+  geom_line(aes(y=CPI,color="CPI"))+
+  geom_line(aes(y=Energy,color="Global price of energy index"))+
+  geom_line(aes(y=Food,color="Global price of Food index"))+
+  geom_line(aes(y=Used_cars,color="Used car price index"))+
+  geom_line(aes(y=Housing_prices,color="Housing price index"))+
+  geom_line(aes(y=Unemployment_Rate,color="Unemployment Rate"))+
+  geom_line(aes(y=AvgElectricityPrices,color="Average Electricity Prices"))+
+  theme_bw()+ylab("Index value (base = 100)")+xlab(NULL)+
+  scale_x_date(date_breaks="4 year")+labs(colour="Index series")+ggtitle("Index series from 1992-01-01")
+```
+
+```{r}
+ggplot(data=NULL,aes(x=final_ts_df$Date[-1]))+
+  geom_line(aes(y=diff(log(final_ts_df$PPI)),color="PPI"))+
+  geom_line(aes(y=diff(log(final_ts_df$CPI)),color="CPI"))+
+  geom_line(aes(y=diff(log(final_ts_df$Energy)),color="Global price of energy index"))+
+  geom_line(aes(y=diff(log(final_ts_df$Food)),color="Global price of Food index"))+
+  geom_line(aes(y=diff(log(final_ts_df$Used_cars)),color="Used car price index"))+
+  geom_line(aes(y=diff(log(final_ts_df$Housing_prices)),color="Housing price index"))+
+  geom_line(aes(y=diff(log(final_ts_df$Unemployment_Rate)),color="U.S Unemployment Rate"))+
+  geom_line(aes(y=diff(log(final_ts_df$AvgElectricityPrices)),color="Average U.S City Electricity Prices"))+
+  theme_bw()+ylab("Percentage change")+xlab(NULL)+
+  scale_x_date(date_breaks="4 year")+
+  scale_y_continuous(labels=scales::percent,breaks=scales::pretty_breaks(n=20))+
+  labs(colour="Index series")+ggtitle("Index series from 1992-01-01")
+```
+Big Spike for Unemployment during covid that might have a significant impact on model. 
+
+## Checking for stationarity and persistence after first differencing of log variables:
+
+```{r,fig.height=10}
+# par(mfrow=c(3,3))
+acf(diff(log(final_ts_df$Energy)),main="ACF for Energy")
+acf(diff(log(final_ts_df$Food)),main="ACF for Food")
+acf(diff(log(final_ts_df$Housing_prices)),main="ACF for Housing")
+acf(diff(log(final_ts_df$Used_cars)),main="ACF for Used cars")
+acf(diff(log(final_ts_df$PPI)),main="ACF for PPI")
+acf(diff(log(final_ts_df$CPI)),main="ACF for CPI")
+acf(diff(log(final_ts_df$Unemployment_Rate)),main="ACF for Unemployment")
+acf(diff(log(final_ts_df$AvgElectricityPrices)),main="ACF for Avg. U.S City Electricity Prices")
+```
+
+After first differencing, most variables still exhibit AR(1) autocorrelation, with the exception of housing and electricity prices, which exhibits cyclicality in their ACF.
+
+## Model fitting
+```{r}
+final_ts_df['log_Energy']=log(final_ts_df$Energy)
+final_ts_df['diff_log_Energy']=difference(final_ts_df$log_Energy)
+final_ts_df['lag_diff_log_Energy']=lag(final_ts_df$diff_log_Energy)
+final_ts_df['log_Food']=log(final_ts_df$Food)
+final_ts_df['diff_log_Food']=difference(final_ts_df$log_Food)
+final_ts_df['lag_diff_log_Food']=lag(final_ts_df$diff_log_Food)
+final_ts_df['log_CPI']=log(final_ts_df$CPI)
+final_ts_df['diff_log_CPI']=difference(final_ts_df$log_CPI)
+final_ts_df['log_PPI']=log(final_ts_df$PPI)
+final_ts_df['diff_log_PPI']=difference(final_ts_df$log_PPI)
+single_lag_CPI_Food_Energy=lm(diff_log_CPI~diff_log_Energy+diff_log_Food,data=final_ts_df)
+double_lag_CPI_Food_Energy=lm(diff_log_CPI~diff_log_Energy+lag_diff_log_Energy+diff_log_Food+lag_diff_log_Food,data=final_ts_df)
+single_lag_PPI_Food_Energy=lm(diff_log_PPI~diff_log_Energy+diff_log_Food,data=final_ts_df)
+double_lag_PPI_Food_Energy=lm(diff_log_PPI~diff_log_Energy+lag_diff_log_Energy+diff_log_Food+lag_diff_log_Food,data=final_ts_df)
+```
+
+Model Building - CPI vs Housing and Used Cars
+
+```{r}
+final_ts_df['log_Housing'] = log(final_ts_df$Housing_prices)
+final_ts_df['diff_log_Housing'] = difference(final_ts_df$log_Housing)
+final_ts_df['lag_diff_log_Housing'] = lag(final_ts_df$diff_log_Housing)
+final_ts_df['log_Used_Cars'] = log(final_ts_df$Used_cars)
+final_ts_df['diff_log_Used_Cars'] = difference(final_ts_df$log_Used_Cars)
+final_ts_df['lag_diff_log_Used_Cars'] = lag(final_ts_df$diff_log_Used_Cars)
+
+CPI_Hosuing_Used_Cars <- lm ( diff_log_CPI ~ diff_log_Housing + diff_log_Used_Cars , data = final_ts_df)
+lag_CPI_Hosuing_Used_Cars <- lm ( diff_log_CPI ~ diff_log_Housing + lag_diff_log_Housing + diff_log_Used_Cars + lag_diff_log_Used_Cars, data = final_ts_df)
+
+```
+
+Model Evaluation - CPI vs Housing and Used Cars
+
+```{r}
+
+summary(CPI_Hosuing_Used_Cars)
+
+plot(CPI_Hosuing_Used_Cars$residuals)
+
+acf(CPI_Hosuing_Used_Cars$residuals)
+```
+
+1 lag
+```{r}
+summary(lag_CPI_Hosuing_Used_Cars)
+
+plot(lag_CPI_Hosuing_Used_Cars$residuals)
+
+acf(lag_CPI_Hosuing_Used_Cars$residuals)
+
+linearHypothesis(lag_CPI_Hosuing_Used_Cars,c("lag_diff_log_Housing=0", "lag_diff_log_Used_Cars=0"),vcov=vcovHAC)
+
+```
+
+Model Building - PPi vs Housing and Used Cars
+
+```{r}
+
+PPI_Hosuing_Used_Cars <- lm ( diff_log_PPI ~ diff_log_Housing + diff_log_Used_Cars , data = final_ts_df)
+
+lag_PPI_Hosuing_Used_Cars <- lm ( diff_log_PPI ~ diff_log_Housing + lag_diff_log_Housing + diff_log_Used_Cars + lag_diff_log_Used_Cars, data = final_ts_df)
+
+```
+
+Model Evaluation - PPI vs Housing and Used Cars
+```{r}
+summary(PPI_Hosuing_Used_Cars)
+
+plot(PPI_Hosuing_Used_Cars$residuals)
+
+acf(PPI_Hosuing_Used_Cars$residuals)
+
+```
+
+1 lag
+```{r}
+
+summary(lag_PPI_Hosuing_Used_Cars)
+
+plot(lag_PPI_Hosuing_Used_Cars$residuals)
+
+acf(lag_PPI_Hosuing_Used_Cars$residuals)
+
+linearHypothesis(lag_PPI_Hosuing_Used_Cars,c("lag_diff_log_Housing=0", "lag_diff_log_Used_Cars=0"),vcov=vcovHAC)
+```
+
+Unemployment and Electricity
+
+```{r}
+final_ts_df['log_Unemployment']=log(final_ts_df$Unemployment_Rate)
+final_ts_df['diff_log_Unemployment']=difference(final_ts_df$log_Unemployment)
+final_ts_df['lag_diff_log_Unemployment'] = lag(final_ts_df$diff_log_Unemployment)
+final_ts_df['log_AvgElectricityPrices']=log(final_ts_df$AvgElectricityPrices)
+final_ts_df['diff_log_AvgElectricityPrices']=difference(final_ts_df$log_AvgElectricityPrices)
+final_ts_df['lag_diff_log_AvgElectricityPrices'] = lag(final_ts_df$diff_log_AvgElectricityPrices)
+```
+
+CPI vs Unemployment & Electricity Prices
+
+```{r}
+CPI_Unemployment_Electricity <- lm ( diff_log_CPI ~ diff_log_Unemployment + diff_log_AvgElectricityPrices , data = final_ts_df)
+
+summary(CPI_Unemployment_Electricity)
+
+plot(CPI_Unemployment_Electricity)
+
+acf(CPI_Unemployment_Electricity$residuals)
+
+```
+
+```{r}
+
+lag_CPI_Unemployment_AvgElectricityPrices <- lm ( diff_log_CPI ~ diff_log_Unemployment + lag_diff_log_Unemployment + diff_log_AvgElectricityPrices + lag_diff_log_AvgElectricityPrices, data = final_ts_df)
+
+summary(lag_CPI_Unemployment_AvgElectricityPrices)
+
+plot(lag_CPI_Unemployment_AvgElectricityPrices)
+
+acf(lag_CPI_Unemployment_AvgElectricityPrices$residuals)
+
+```
+
+PPI vs Unemployment & Electricity Prices
+
+```{r}
+PPI_Unemployment_Electricity <- lm ( diff_log_PPI ~ diff_log_Unemployment + diff_log_AvgElectricityPrices , data = final_ts_df)
+
+summary(PPI_Unemployment_Electricity)
+
+plot(PPI_Unemployment_Electricity)
+
+acf(PPI_Unemployment_Electricity$residuals)
+
+```
+
+```{r}
+
+lag_PPI_Unemployment_AvgElectricityPrices <- lm ( diff_log_PPI ~ diff_log_Unemployment + lag_diff_log_Unemployment + diff_log_AvgElectricityPrices + lag_diff_log_AvgElectricityPrices, data = final_ts_df)
+
+summary(lag_PPI_Unemployment_AvgElectricityPrices)
+
+plot(lag_PPI_Unemployment_AvgElectricityPrices)
+
+acf(lag_PPI_Unemployment_AvgElectricityPrices$residuals)
+
+```
+
+
+
+## Model examination
+
+To compare models using no lags for each variable against models using 1 lag for each variable, we look at three things:
+1) Their residual plots
+2) Their ACF
+3) Whether a model where the coefficients for lagged variables are coerced to zero has statistically significant difference from the model using 1 lag for each variable
+
+```{r}
+par(mfrow=c(1,2))
+plot(rstandard(single_lag_CPI_Food_Energy)~fitted(single_lag_CPI_Food_Energy),ylab="Standardized residual",xlab="Fitted values",main="Single lag")
+plot(rstandard(double_lag_CPI_Food_Energy)~fitted(double_lag_CPI_Food_Energy),ylab="Standardized residual",xlab="Fitted values",
+main="Double lag")
+```
+
+```{r}
+par(mfrow=c(1,2))
+acf(resid(single_lag_CPI_Food_Energy),main="Single lag")
+acf(resid(double_lag_CPI_Food_Energy),main="Double lag")
+```
+
+```{r}
+linearHypothesis(double_lag_CPI_Food_Energy,c("lag_diff_log_Energy=0","lag_diff_log_Food=0"),vcov=vcovHAC)
+```
+
+```{r,fig.width=10}
+par(mfrow=c(1,2))
+plot(rstandard(single_lag_PPI_Food_Energy)~fitted(single_lag_PPI_Food_Energy),ylab="Standardized residual",xlab="Fitted values",main="Single lag")
+plot(rstandard(double_lag_PPI_Food_Energy)~fitted(double_lag_PPI_Food_Energy),ylab="Standardized residual",xlab="Fitted values",
+main="Double lag")
+```
+
+```{r}
+par(mfrow=c(1,2))
+acf(resid(single_lag_PPI_Food_Energy),main="Single lag")
+acf(resid(double_lag_PPI_Food_Energy),main="Double lag")
+```
+
+```{r}
+linearHypothesis(double_lag_PPI_Food_Energy,c("lag_diff_log_Energy=0","lag_diff_log_Food=0"),vcov=vcovHAC)
+```
+
+For both CPI and PPI, we see that using up to the first lag of the first difference of the logged variable yields a better fit model than not using such lags.
+
+## Model selection:
+
+```{r}
+
+```
+
+
