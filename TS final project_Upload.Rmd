@@ -114,7 +114,11 @@ acf(diff(log(final_ts_df$AvgElectricityPrices)),main="ACF for Avg. U.S City Elec
 ```
 
 
-## Variable examination:
+## Lag importance examination:
+Our variable examination process consists of three steps:
+1. Running a regression of our variables with the appropriate number of lags against CPI and PPI to determine if the lags have any statistically significant effect.
+2. Use a model F-test to determine if a model without lags could fit as well as a model with lags.
+
 
 Food and Energy
 
@@ -159,6 +163,7 @@ acf(lag_PPI_Food_Energy$residuals)
 linearHypothesis(lag_PPI_Food_Energy,c("lag_diff_log_Energy=0","lag_diff_log_Food=0"),vcov=vcovHAC)
 ```
 
+For Energy and Food, we found that using up to their first lags gives the most explanatory power.
 
 Housing and Used Cars
 
@@ -200,6 +205,8 @@ acf(lag_PPI_Housing_Used_Cars$residuals)
 linearHypothesis(lag_PPI_Housing_Used_Cars,c("lag_12_diff_log_Housing=0","lag_diff_log_Used_Cars=0"),vcov=vcovHAC)
 ```
 
+For both Used Cars and Housing, lags do not add explanatory effect.
+
 Unemployment and Electricity
 
 ```{r}
@@ -237,38 +244,52 @@ acf(lag_PPI_Unemployment_AvgElectricityPrices$residuals)
 linearHypothesis(lag_PPI_Unemployment_AvgElectricityPrices,c("lag_4_diff_log_AvgElectricityPrices =0"),vcov=vcovHAC)
 ```
 
-## Model selection:
+For Unemployment Rate and Average Electricity Prices, lags do not add any explanatory effect.
 
+## Final model
+We fit a model using all six variables with no lags, and the same model but including the first lags for Energy and Food Price as determined above.
+
+### For CPI
 ```{r}
+complete_fit_CPI <- lm( diff_log_CPI ~ diff_log_Energy  + diff_log_Food + diff_log_Housing +   diff_log_Used_Cars + diff_Unemployment + diff_log_AvgElectricityPrices, data = final_ts_df)
 
-complete_lag_fit_CPI <- lm( diff_log_CPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Food + lag_diff_log_Food + diff_log_Housing  +  diff_log_Used_Cars +  diff_log_Unemployment + diff_log_AvgElectricityPrices, data = final_ts_df)
+complete_lag_fit_CPI <- lm( diff_log_CPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Food + lag_diff_log_Food + diff_log_Housing  +  diff_log_Used_Cars +  diff_Unemployment + diff_log_AvgElectricityPrices, data = final_ts_df)
+```
 
-complete_fit_CPI <- lm( diff_log_CPI ~ diff_log_Energy  + diff_log_Food + diff_log_Housing +   diff_log_Used_Cars + diff_log_Unemployment + diff_log_AvgElectricityPrices, data = final_ts_df)
-
-summary(complete_lag_fit_CPI)
- 
-plot(complete_lag_fit_CPI$residuals)
-
+```{r,fig.height=10,fig.width=10}
+par(mfrow=c(2,2))
+plot(complete_fit_CPI,which=c(1))
+plot(complete_lag_fit_CPI,which=c(1))
+acf(complete_fit_CPI$residuals)
 acf(complete_lag_fit_CPI$residuals)
-
-AIC(complete_fit_CPI)
-AIC(complete_lag_fit_CPI)
-
 ```
+
 
 ```{r}
-
-complete_lag_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Food + lag_diff_log_Food + diff_log_Housing +  diff_log_Used_Cars + diff_log_Unemployment + lag_diff_log_Unemployment + diff_log_AvgElectricityPrices, data = final_ts_df)
-
-complete_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy + diff_log_Food + diff_log_Housing +  diff_log_Used_Cars + diff_log_Unemployment + diff_log_AvgElectricityPrices, data = final_ts_df)
-
-summary(complete_lag_fit_PPI)
-
-plot(complete_lag_fit_PPI$residuals)
-
-acf(complete_lag_fit_PPI$residuals)
-
-AIC(complete_fit_PPI)
-AIC(complete_lag_fit_PPI)
-
+summary(complete_lag_fit_CPI)
+#AIC(complete_fit_CPI)
+#AIC(complete_lag_fit_CPI)
 ```
+
+
+### FOr PPI
+```{r}
+complete_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy  + diff_log_Food + diff_log_Housing +   diff_log_Used_Cars + diff_Unemployment + diff_log_AvgElectricityPrices, data = final_ts_df)
+
+complete_lag_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Food + lag_diff_log_Food + diff_log_Housing  +  diff_log_Used_Cars +  diff_Unemployment + diff_log_AvgElectricityPrices, data = final_ts_df)
+```
+
+```{r,fig.height=10,fig.width=10}
+par(mfrow=c(2,2))
+plot(complete_fit_PPI,which=c(1))
+plot(complete_lag_fit_PPI,which=c(1))
+acf(complete_fit_PPI$residuals)
+acf(complete_lag_fit_PPI$residuals)
+```
+```{r}
+summary(complete_lag_fit_PPI)
+#AIC(complete_fit_PPI)
+#AIC(complete_lag_fit_PPI)
+```
+
+
