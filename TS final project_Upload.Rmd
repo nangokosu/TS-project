@@ -223,9 +223,7 @@ linearHypothesis(lag_PPI_Hosuing_Used_Cars,c("lag_diff_log_Housing=0", "lag_diff
 Unemployment and Electricity
 
 ```{r}
-final_ts_df['log_Unemployment']=log(final_ts_df$Unemployment_Rate)
-final_ts_df['diff_log_Unemployment']=difference(final_ts_df$log_Unemployment)
-final_ts_df['lag_diff_log_Unemployment'] = lag(final_ts_df$diff_log_Unemployment)
+final_ts_df['diff_Unemployment']=difference(final_ts_df$Unemployment_Rate)
 final_ts_df['log_AvgElectricityPrices']=log(final_ts_df$AvgElectricityPrices)
 final_ts_df['diff_log_AvgElectricityPrices']=difference(final_ts_df$log_AvgElectricityPrices)
 final_ts_df['lag_4_diff_log_AvgElectricityPrices'] = lag(final_ts_df$diff_log_AvgElectricityPrices, k = 4)
@@ -234,7 +232,7 @@ final_ts_df['lag_4_diff_log_AvgElectricityPrices'] = lag(final_ts_df$diff_log_Av
 CPI vs Unemployment & Electricity Prices
 
 ```{r}
-CPI_Unemployment_Electricity <- lm ( diff_log_CPI ~ diff_log_Unemployment + diff_log_AvgElectricityPrices , data = final_ts_df)
+CPI_Unemployment_Electricity <- lm ( diff_log_CPI ~ diff_Unemployment + diff_log_AvgElectricityPrices , data = final_ts_df)
 
 summary(CPI_Unemployment_Electricity)
 
@@ -246,7 +244,7 @@ acf(CPI_Unemployment_Electricity$residuals)
 
 ```{r}
 
-lag_CPI_Unemployment_AvgElectricityPrices <- lm ( diff_log_CPI ~ diff_log_Unemployment + lag_diff_log_Unemployment + diff_log_AvgElectricityPrices + lag_4_diff_log_AvgElectricityPrices, data = final_ts_df)
+lag_CPI_Unemployment_AvgElectricityPrices <- lm ( diff_log_CPI ~ diff_Unemployment + diff_log_AvgElectricityPrices + lag_4_diff_log_AvgElectricityPrices, data = final_ts_df)
 
 summary(lag_CPI_Unemployment_AvgElectricityPrices)
 
@@ -262,11 +260,11 @@ AIC(lag_CPI_Unemployment_AvgElectricityPrices)
 PPI vs Unemployment & Electricity Prices
 
 ```{r}
-PPI_Unemployment_Electricity <- lm ( diff_log_PPI ~ diff_log_Unemployment + diff_log_AvgElectricityPrices , data = final_ts_df)
+PPI_Unemployment_Electricity <- lm ( diff_log_PPI ~ diff_Unemployment + diff_log_AvgElectricityPrices , data = final_ts_df)
 
 summary(PPI_Unemployment_Electricity)
 
-plot(PPI_Unemployment_Electricity$residuals)
+plot(PPI_Unemployment_Electricity)
 
 acf(PPI_Unemployment_Electricity$residuals)
 
@@ -274,11 +272,11 @@ acf(PPI_Unemployment_Electricity$residuals)
 
 ```{r}
 
-lag_PPI_Unemployment_AvgElectricityPrices <- lm ( diff_log_PPI ~ diff_log_Unemployment + lag_diff_log_Unemployment + diff_log_AvgElectricityPrices + lag_12_diff_log_AvgElectricityPrices, data = final_ts_df)
+lag_PPI_Unemployment_AvgElectricityPrices <- lm ( diff_log_PPI ~ diff_Unemployment + diff_log_AvgElectricityPrices + lag_4_diff_log_AvgElectricityPrices, data = final_ts_df)
 
 summary(lag_PPI_Unemployment_AvgElectricityPrices)
 
-plot(lag_PPI_Unemployment_AvgElectricityPrices$residuals)
+plot(lag_PPI_Unemployment_AvgElectricityPrices)
 
 acf(lag_PPI_Unemployment_AvgElectricityPrices$residuals)
 
