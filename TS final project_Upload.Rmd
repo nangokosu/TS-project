@@ -49,30 +49,28 @@ personal_savings_rate=getSymbols('PSAVERT',src='FRED',auto.assign=F)['1992-01-01
 
 # I don't know that these necessarily need to be indexed. - Christian
 Unemployment=getSymbols('UNRATE',src='FRED',auto.assign=F)['1992-01-01/']
-
-Electricty_avg=getSymbols('APU000072610',src='FRED',auto.assign=F)['1992-01-01/']
-
-
+Electricity_avg=getSymbols('APU000072610',src='FRED',auto.assign=F)['1992-01-01/']
+Electricity_avg=Electricity_avg/Electricity_avg[[1]]*100
 ```
 
 ## Merging:
 
 This code chunk merges the individual extracted xts series into one object
 ```{r pressure, echo=FALSE}
-list_ts=list(cpi,ppi,energy,food,used_cars,govt_spending,personal_savings_rate,housing, Unemployment, Electricty_avg)
+list_ts=list(cpi,ppi,energy,food,used_cars,housing, Unemployment, Electricity_avg)
 final_xts=do.call(merge,list_ts)
 # Final object omitting all NA variables due to lack of historical data
-final_xts=na.approx(final_xts)
+final_xts=na.approx(final_xts) # Linear approximation
 final_xts=na.locf(final_xts)
 final_ts_df=final_xts%>%fortify.zoo()%>%as_tsibble()
-colnames(final_ts_df)=c("Date","CPI","PPI","Energy","Food","Used_cars","Govt_spending","Personal_savings","Housing_prices", "Unemployment_Rate", "AvgElectricityPrices")
-colnames(final_xts)=c("CPI","PPI","Energy","Food","Used_cars","Govt_spending","Personal_savings","Housing_prices", "Unemployment_Rate", "AvgElectricityPrices")
+colnames(final_ts_df)=c("Date","CPI","PPI","Energy","Food","Used_cars","Housing_prices", "Unemployment_Rate", "AvgElectricityPrices")
+colnames(final_xts)=c("CPI","PPI","Energy","Food","Used_cars","Housing_prices", "Unemployment_Rate", "AvgElectricityPrices")
 ```
 
 
 ## EDA:
 For all indices
-```{r}
+```{r,fig.width=10}
 ggplot(final_ts_df,aes(x=Date))+
   geom_line(aes(y=PPI,color="PPI"))+
   geom_line(aes(y=CPI,color="CPI"))+
@@ -80,11 +78,20 @@ ggplot(final_ts_df,aes(x=Date))+
   geom_line(aes(y=Food,color="Global price of Food index"))+
   geom_line(aes(y=Used_cars,color="Used car price index"))+
   geom_line(aes(y=Housing_prices,color="Housing price index"))+
-  geom_line(aes(y=Unemployment_Rate,color="Unemployment Rate"))+
   geom_line(aes(y=AvgElectricityPrices,color="Average Electricity Prices"))+
   theme_bw()+ylab("Index value (base = 100)")+xlab(NULL)+
-  scale_x_date(date_breaks="4 year")+labs(colour="Index series")+ggtitle("Index series from 1992-01-01")
+  scale_x_date(date_breaks="4 year")+labs(colour="Index series")+ggtitle("Index series from 1992-01-01")+
+  theme(text=element_text(size=12))
 ```
+```{r,fig.width=10}
+ggplot(final_ts_df,aes(x=Date))+
+  geom_line(aes(y=Unemployment))+
+  theme_bw()+ylab("Index value (base = 100)")+xlab(NULL)+
+  scale_x_date(date_breaks="4 year")+labs(colour="Index series")+ggtitle("Index series from 1992-01-01")+
+  theme(text=element_text(size=12))
+```
+
+
 
 ```{r}
 ggplot(data=NULL,aes(x=final_ts_df$Date[-1]))+
@@ -113,7 +120,7 @@ acf(diff(log(final_ts_df$Housing_prices)),main="ACF for Housing")
 acf(diff(log(final_ts_df$Used_cars)),main="ACF for Used cars")
 acf(diff(log(final_ts_df$PPI)),main="ACF for PPI")
 acf(diff(log(final_ts_df$CPI)),main="ACF for CPI")
-acf(diff(log(final_ts_df$Unemployment_Rate)),main="ACF for Unemployment")
+acf(diff(final_ts_df$Unemployment_Rate),main="ACF for Unemployment")
 acf(diff(log(final_ts_df$AvgElectricityPrices)),main="ACF for Avg. U.S City Electricity Prices")
 ```
 
