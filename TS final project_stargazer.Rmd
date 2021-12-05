@@ -424,21 +424,20 @@ final_fit_CPI <- lm( diff_log_CPI ~ diff_log_Energy  +  diff_log_Housing +   dif
 final_lag_fit_CPI <- lm( diff_log_CPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Housing  +  diff_log_Used_Cars + diff_log_AvgElectricityPrices, data = final_ts_df)
 ```
 
-```{r,fig.height=10,fig.width=10}
-par(mar = c(2,2,5,5))
-par(mfrow=c(2,2))
-plot(final_fit_CPI,which=c(1))
-plot(final_lag_fit_CPI,which=c(1))
-acf(final_fit_CPI$residuals)
-acf(final_lag_fit_CPI$residuals)
+```{r}
+modelsummary(list(
+  "final_CPI"=final_fit_CPI,
+  "final_CPI_w_lags"=final_lag_fit_CPI),estimate="{estimate}{stars}")
 ```
 
 
-```{r}
-summary(final_fit_CPI)
-summary(final_lag_fit_CPI)
-AIC(final_fit_CPI)
-AIC(final_lag_fit_CPI)
+```{r,fig.height=10,fig.width=10}
+par(mar = c(3,3,5,5))
+par(mfrow=c(2,2))
+plot(final_fit_CPI,which=c(1))
+plot(final_lag_fit_CPI,which=c(1))
+acf(final_fit_CPI$residuals,main="Model with lags")
+acf(final_lag_fit_CPI$residuals,main="Model without lags")
 ```
 
 From running what could be the "final" CPI models, including & excluding relevant lagged variables, it seems that the complete model without lags has a better AIC score with marginally better or similar other metric (Residual standard error, Adjusted R-Squared, etc.) values. However, the initial complete_lag_fit_CPI that includes food and unemployment related variables has a marginally better AIC, but I think this is simply due to inclusion of a higher number of predictor variables NOT the inclusion of important/significant predictor variables. Ultimately, I would argue that the above final CPI models would be preferable. 
@@ -512,26 +511,55 @@ final_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy  + diff_log_Food + diff_log_
 final_lag_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Food + lag_diff_log_Food + diff_log_Housing, data = final_ts_df)
 ```
 
+```{r}
+modelsummary(list(
+  "final_PPI"=final_fit_PPI,
+  "final_PPI_w_lags"=final_lag_fit_PPI),estimate="{estimate}{stars}")
+```
+
+
 ```{r,fig.height=10,fig.width=10}
 par(mar = c(2,2,5,5))
 par(mfrow=c(2,2))
 plot(final_fit_PPI,which=c(1))
 plot(final_lag_fit_PPI,which=c(1))
-acf(final_fit_PPI$residuals)
-acf(final_lag_fit_PPI$residuals)
+acf(final_fit_PPI$residuals,main="Model without lags")
+acf(final_lag_fit_PPI$residuals,main="Model with lags")
+```
+## Investigating if PPI and CPI affects PPI:
+Ultimately, as everyday people, we are more concerned with CPI. As seen above, we have a model that parsimoniously describes some of the variables that can affect CPI. However, we want to know if PPI itself can affect CPI, by virtue of the producers passing on costs to consumers. Additionally, we want to see if CPI itself has autocrrelation.
+
+```{r}
+par(mar = c(3,3,5,5))
+ccf(x=final_ts_df$diff_log_PPI,y=final_ts_df$diff_log_CPI,main="CPI cross correlation with PPI")
+```
+
+Based on our CCF plot, CPI inflation has significant positive correlation with PPI inflation at its zeroth and first lags, and has strong positive autocorrelation at a lag of 1
+```{r}
+final_ts_df['lag_diff_log_PPI']=lag(final_ts_df$diff_log_PPI,1)
+final_lag_fit_full_CPI <- dynlm( diff_log_CPI ~ diff_log_PPI+lag_diff_log_PPI+diff_log_Energy + lag_diff_log_Energy + diff_log_Housing  +  diff_log_Used_Cars + diff_log_AvgElectricityPrices, data = final_ts_df)
 ```
 
 ```{r}
-summary(final_fit_PPI)
-summary(final_lag_fit_PPI)
-AIC(final_fit_PPI)
-AIC(final_lag_fit_PPI)
+modelsummary(list(
+  "final_model_without_PPI"=final_lag_fit_CPI,
+  "final_model_with_PPI"=final_lag_fit_full_CPI
+),estimate="{estimate}{stars}")
+```
+```{r,fig.width=10}
+par(mar = c(2,2,5,5))
+par(mfrow=c(2,2))
+plot(final_lag_fit_CPI,which=c(1))
+plot(final_lag_fit_full_CPI,which=c(1))
+acf(final_lag_fit_CPI$residuals,main="Model without PPI")
+acf(final_lag_fit_full_CPI$residuals,main="Model with PPI")
 ```
 
-Both of these final models have a better AIC than the initial ones. They also have marginally better Residual Standard Errors & Adjusted R-Squared.
 
+## Summary:
+We found that the energy prices currently and in the previous period, food prices currently and in the previous period, and housing prices are strong, positive correlated predictors for PPI. Energy prices and food prices make sense, given that they are common inputs for production processes. However, housing seems to be an anomalous predictor as there should be no reason why producers should care about housing prices, unless it affects their rent.
 
-
+We found that the energy prices currently and in the previous period, housing prices, used cars prices, PPI currently and in the previous period are positively correlated predictors for CPI. This makes sense as these are items that factor into the current calculation for CPI, while PPI factors indirectly because producers, facing higher costs, will pass on some/all of the costs to consumers, leading to price raises for purchased goods. However, the negative correlation with average electricity prices seems anomalous, as the intuition is in the opposite direction: higher electricity prices should feed through all processes that utilize electricity, leading to price increases across the board.
 
 
 
