@@ -22,10 +22,9 @@ library(dynlm)
 library(car)
 library(sandwich)
 library(leaps) # for the leaps() function
-
 ```
 
-## Extracting the data from FRED:
+## Extracting the data from FRED and indexing:
 
 This code chunk below uses the quantmod package to get FRED data via its API.
 
@@ -40,10 +39,8 @@ food=getSymbols('PFOODINDEXM',src='FRED',auto.assign=F)['1992-01-01/']
 food=food/food[[1]]*100
 used_cars=getSymbols('CUSR0000SETA02',src='FRED',auto.assign=F)['1992-01-01/']
 used_cars=used_cars/used_cars[[1]]*100
-
 housing=getSymbols('CPIHOSNS',src='FRED',auto.assign=F)['1992-01-01/']
-
-Unemployment=getSymbols('UNRATE',src='FRED',auto.assign=F)['1992-01-01/']
+Unemployment=getSymbols('UNRATE',src='FRED',auto.assign=F)['1992-01-01/']/100
 Electricity_avg=getSymbols('APU000072610',src='FRED',auto.assign=F)['1992-01-01/']
 Electricity_avg=Electricity_avg/Electricity_avg[[1]]*100
 ```
@@ -65,7 +62,7 @@ colnames(final_xts)=c("CPI","PPI","Energy","Food","Used_cars","Housing_prices", 
 
 ## EDA:
 For all indices
-```{r,fig.width=10}
+```{r,fig.width=10,echo=False}
 ggplot(final_ts_df,aes(x=Date))+
   geom_line(aes(y=PPI,color="PPI"))+
   geom_line(aes(y=CPI,color="CPI"))+
@@ -78,17 +75,20 @@ ggplot(final_ts_df,aes(x=Date))+
   scale_x_date(date_breaks="4 year")+labs(colour="Index series")+ggtitle("Index series from 1992-01-01")+
   theme(text=element_text(size=12))
 ```
-```{r,fig.width=10}
+```{r,fig.width=10,echo=FALSE}
 ggplot(final_ts_df,aes(x=Date))+
   geom_line(aes(y=Unemployment))+
   theme_bw()+ylab("Index value (base = 100)")+xlab(NULL)+
   scale_x_date(date_breaks="4 year")+labs(colour="Index series")+ggtitle("Index series of unemployment rate from 1992-01-01")+
   theme(text=element_text(size=12))
 ```
+Big Spike for Unemployment during covid that might have a significant impact on model. This informs our rationale to test COVID as a factor of inflation.
 
+All of our series are non-stationary in their current form. As such, we choose to:
+1. Take the log of all indices (so this excludes unemployment rate)
+2. Take the first difference of the logged series, and the first difference of unemployment rate.
 
-
-```{r}
+```{r,fig.width=10}
 ggplot(data=NULL,aes(x=final_ts_df$Date[-1]))+
   geom_line(aes(y=diff(log(final_ts_df$PPI)),color="PPI"))+
   geom_line(aes(y=diff(log(final_ts_df$CPI)),color="CPI"))+
@@ -96,16 +96,20 @@ ggplot(data=NULL,aes(x=final_ts_df$Date[-1]))+
   geom_line(aes(y=diff(log(final_ts_df$Food)),color="Global price of Food index"))+
   geom_line(aes(y=diff(log(final_ts_df$Used_cars)),color="Used car price index"))+
   geom_line(aes(y=diff(log(final_ts_df$Housing_prices)),color="Housing price index"))+
-  geom_line(aes(y=diff(log(final_ts_df$Unemployment_Rate)),color="U.S Unemployment Rate"))+
   geom_line(aes(y=diff(log(final_ts_df$AvgElectricityPrices)),color="Average U.S City Electricity Prices"))+
   theme_bw()+ylab("Percentage change")+xlab(NULL)+
   scale_x_date(date_breaks="4 year")+
   scale_y_continuous(labels=scales::percent,breaks=scales::pretty_breaks(n=20))+
-  labs(colour="Index series")+ggtitle("Index series from 1992-01-01")
+  labs(colour="First difference of log")+ggtitle("Index series from 1992-01-01")
 ```
-Big Spike for Unemployment during covid that might have a significant impact on model. 
 
-## Checking for stationarity and persistence after first differencing of log variables:
+```{r,fig.width=10}
+ggplot(data=NULL,aes(x=final_ts_df$Date[-1]))+
+  geom_line(aes(y=diff(final_ts_df$Unemployment_Rate),color="First difference of unemployment rate"))+ggtitle("First difference of unemployment rate from 1992-01-01")+theme_bw()+xlab(NULL)+scale_x_date(date_breaks="4 year")+
+  scale_y_continuous(labels=scales::percent,breaks=scales::pretty_breaks(n=20))+labs(colour="First difference of log")+ylab("")
+```
+
+## Checking for stationarity and persistence of first difference:
 
 ```{r,fig.height=10}
 par(mar = c(3,3,5,5))
@@ -116,14 +120,14 @@ acf(diff(log(final_ts_df$Energy)),main="ACF for Energy")
 acf(diff(log(final_ts_df$Food)),main="ACF for Food")
 acf(diff(log(final_ts_df$Housing_prices)),main="ACF for Housing")
 acf(diff(log(final_ts_df$Used_cars)),main="ACF for Used cars")
-acf(diff(final_ts_df$Unemployment_Rate),main="ACF for Unemployment")
+acf(diff(final_ts_df$Unemployment_Rate),main="ACF for Unemployment Rate")
 acf(diff(log(final_ts_df$AvgElectricityPrices)),main="ACF for Avg. U.S City Electricity Prices")
 ```
 
 
 ## Lag importance examination:
-Our variable examination process consists of three steps:
-1. Running a regression of our variables with the appropriate number of lags against CPI and PPI to determine if the lags have any statistically significant effect.
+We want to run a regression of PPI and CPI against our response variables, but we also want to know if we should include any lags of our variables in the regressors as well. To do so, we choose to:
+1. Run a regression of our variables with the lags with statistically significant autocorrelation from the ACF against CPI and PPI..
 2. Use a model F-test to determine if a model without lags could fit as well as a model with lags.
 
 
@@ -152,7 +156,7 @@ Model Evaluation - CPI vs Energy and Food
 
 ```{r}
 summary(lag_CPI_Food_Energy)
-plot(lag_CPI_Food_Energy)
+plot(lag_CPI_Food_Energy,which=c(1,2))
 acf(lag_CPI_Food_Energy$residuals)
 linearHypothesis(lag_CPI_Food_Energy,c("lag_diff_log_Energy=0","lag_diff_log_Food=0"),vcov=vcovHAC)
 ```
@@ -165,7 +169,7 @@ lag_PPI_Food_Energy=lm(diff_log_PPI~diff_log_Energy+lag_diff_log_Energy+diff_log
 Model Evaluation - PPI vs Energy and Food
 ```{r}
 summary(lag_PPI_Food_Energy)
-plot(lag_PPI_Food_Energy)
+plot(lag_PPI_Food_Energy,which=c(1,2))
 acf(lag_PPI_Food_Energy$residuals)
 linearHypothesis(lag_PPI_Food_Energy,c("lag_diff_log_Energy=0","lag_diff_log_Food=0"),vcov=vcovHAC)
 ```
@@ -193,7 +197,7 @@ Model Evaluation - CPI vs Housing and Used Cars
 
 ```{r}
 summary(lag_CPI_Housing_Used_Cars)
-plot(lag_CPI_Housing_Used_Cars)
+plot(lag_CPI_Housing_Used_Cars,which=c(1,2))
 acf(lag_CPI_Housing_Used_Cars$residuals)
 linearHypothesis(lag_CPI_Housing_Used_Cars,c("lag_12_diff_log_Housing=0","lag_diff_log_Used_Cars=0"),vcov=vcovHAC)
 ```
@@ -207,7 +211,7 @@ lag_PPI_Housing_Used_Cars <- lm ( diff_log_PPI ~ diff_log_Housing + lag_12_diff_
 Model Evaluation - PPI vs Housing and Used Cars
 ```{r}
 summary(lag_PPI_Housing_Used_Cars)
-plot(lag_PPI_Housing_Used_Cars)
+plot(lag_PPI_Housing_Used_Cars,which=c(1,2))
 acf(lag_PPI_Housing_Used_Cars$residuals)
 linearHypothesis(lag_PPI_Housing_Used_Cars,c("lag_12_diff_log_Housing=0","lag_diff_log_Used_Cars=0"),vcov=vcovHAC)
 ```
@@ -232,7 +236,7 @@ lag_CPI_Unemployment_AvgElectricityPrices <- lm ( diff_log_CPI ~ diff_Unemployme
 Model Evaluation - CPI vs Unemployment & Electricity Prices
 ```{r}
 summary(lag_CPI_Unemployment_AvgElectricityPrices)
-plot(lag_CPI_Unemployment_AvgElectricityPrices)
+plot(lag_CPI_Unemployment_AvgElectricityPrices,which=c(1,2))
 acf(lag_CPI_Unemployment_AvgElectricityPrices$residuals)
 linearHypothesis(lag_CPI_Unemployment_AvgElectricityPrices,c("lag_4_diff_log_AvgElectricityPrices =0"),vcov=vcovHAC)
 ```
@@ -247,12 +251,12 @@ Model Evaluation - PPI vs Unemployment & Electricity Prices
 
 ```{r}
 summary(lag_PPI_Unemployment_AvgElectricityPrices)
-plot(lag_PPI_Unemployment_AvgElectricityPrices)
+plot(lag_PPI_Unemployment_AvgElectricityPrices,which=c(1,2))
 acf(lag_PPI_Unemployment_AvgElectricityPrices$residuals)
 linearHypothesis(lag_PPI_Unemployment_AvgElectricityPrices,c("lag_4_diff_log_AvgElectricityPrices =0"),vcov=vcovHAC)
 ```
 
-For Unemployment Rate and Average Electricity Prices, lags do not add any explanatory effect.
+For Unemployment Rate and Average Electricity Prices, lags do not add any explanatory effect according to our model F-test.
 
 
 ## At this point, I will go ahead and insert Intervention term for COVID starting MARCH 2020
@@ -281,6 +285,11 @@ complete_fit_CPI <- lm( diff_log_CPI ~ diff_log_Energy  + diff_log_Food + diff_l
 
 complete_lag_fit_CPI <- lm( diff_log_CPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Food + lag_diff_log_Food + diff_log_Housing  +  diff_log_Used_Cars +  diff_Unemployment + lag_diff_Unemployment + diff_log_AvgElectricityPrices, data = final_ts_df)
 ```
+
+```{r}
+summary(complete_lag_fit_CPI)
+```
+
 
 ```{r,fig.height=10,fig.width=10}
 par(mar = c(2,2,5,5))
@@ -326,7 +335,7 @@ AIC(COVID_complete_lag_fit_CPI)
 
 COVID doesn't seem to play a significant role for CPI model.
 
-### FOr PPI
+### For PPI
 ```{r}
 complete_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy  + diff_log_Food + diff_log_Housing +   diff_log_Used_Cars + diff_Unemployment + diff_log_AvgElectricityPrices, data = final_ts_df)
 
@@ -341,6 +350,7 @@ plot(complete_lag_fit_PPI,which=c(1))
 acf(complete_fit_PPI$residuals)
 acf(complete_lag_fit_PPI$residuals)
 ```
+
 ```{r}
 summary(complete_fit_PPI)
 summary(complete_lag_fit_PPI)
@@ -351,7 +361,6 @@ AIC(complete_lag_fit_PPI)
 ```{r}
 vif(complete_lag_fit_CPI)
 vif(complete_lag_fit_PPI)
-
 ```
 
 ## For PPI w/ COVID Included
@@ -370,6 +379,7 @@ plot(COVID_complete_lag_fit_PPI,which=c(1))
 acf(COVID_complete_fit_PPI$residuals)
 acf(COVID_complete_lag_fit_PPI$residuals)
 ```
+
 ```{r}
 summary(COVID_complete_fit_PPI)
 summary(COVID_complete_lag_fit_PPI)
@@ -394,8 +404,6 @@ The Leaps below is based on Mallow's Cp which measures predictive ability of a f
 # complete_fit_CPI <- lm( diff_log_CPI ~ diff_log_Energy  + diff_log_Food + diff_log_Housing +   diff_log_Used_Cars + diff_Unemployment + diff_log_AvgElectricityPrices, data = final_ts_df)
 # 
 # complete_lag_fit_CPI <- lm( diff_log_CPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Food + lag_diff_log_Food + diff_log_Housing  +  diff_log_Used_Cars +  diff_Unemployment + lag_diff_Unemployment + diff_log_AvgElectricityPrices, data = final_ts_df)
-
-
 
 complete_CPI.leaps.cp <- leaps(y = final_ts_df$diff_log_CPI, x = final_ts_df[,c(11,14,21,24,26,29)], method = c("Cp"))
 complete_CPI.full.cp <- cbind(complete_CPI.leaps.cp$which, complete_CPI.leaps.cp$Cp)
@@ -554,6 +562,7 @@ plot(final_lag_fit_PPI,which=c(1))
 acf(final_fit_PPI$residuals)
 acf(final_lag_fit_PPI$residuals)
 ```
+
 ```{r}
 summary(final_fit_PPI)
 summary(final_lag_fit_PPI)
