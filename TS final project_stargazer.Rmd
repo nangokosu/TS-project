@@ -190,7 +190,7 @@ cpi_models=list(
   "Unemployment"=lag_CPI_Unemployment,
   "Average Electricity Prices"=lag_CPI_AvgElectricityPrices
 )
-modelsummary(cpi_models,estimate="{estimate}{stars}")
+modelsummary(cpi_models,estimate="{estimate}{stars}",output = "table1.png")
 ```
 
 For CPI, we determine that Energy and Food are significant up to their first lags based on their coefficients.
@@ -249,7 +249,7 @@ complete_lag_fit_CPI <- lm( diff_log_CPI ~ diff_log_Energy + lag_diff_log_Energy
 ```{r}
 cpi_full_models=list(CPI_full=complete_fit_CPI,
      CPI_full_w_lags=complete_lag_fit_CPI)
-modelsummary(cpi_full_models,estimate="{estimate}{stars}")
+modelsummary(cpi_full_models,estimate="{estimate}{stars}",,output="table2.png")
 ```
 
 
@@ -275,7 +275,7 @@ covid_cpi_models=list(
   "cpi_covid"=COVID_complete_fit_CPI,
   "cpi_covid_lag"=COVID_complete_lag_fit_CPI
 )
-modelsummary(covid_cpi_models,estimate="{estimate}{stars}")
+modelsummary(covid_cpi_models,estimate="{estimate}{stars}",output="table4.png")
 ```
 
 ```{r,fig.height=10,fig.width=10}
@@ -293,8 +293,9 @@ COVID doesn't seem to play a significant role for CPI model.
 ```{r}
 complete_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy  + diff_log_Food + diff_log_Housing +   diff_log_Used_Cars + diff_Unemployment + diff_log_AvgElectricityPrices, data = final_ts_df)
 
-complete_lag_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Food + lag_diff_log_Food + diff_log_Housing  +  diff_log_Used_Cars +  diff_Unemployment + diff_log_AvgElectricityPrices, data = final_ts_df)
+complete_lag_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Food + lag_diff_log_Food + diff_log_Housing  +  diff_log_Used_Cars +  diff_Unemployment + diff_log_AvgElectricityPrices+lag_diff_Unemployment, data = final_ts_df)
 ```
+
 
 ```{r}
 ppi_models=list(
@@ -324,7 +325,7 @@ vif(complete_lag_fit_PPI)
 ```{r}
 COVID_complete_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy  + diff_log_Food + diff_log_Housing +   diff_log_Used_Cars + diff_Unemployment + diff_log_AvgElectricityPrices + factor(COVID), data = final_ts_df)
 
-COVID_complete_lag_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Food + lag_diff_log_Food + diff_log_Housing  +  diff_log_Used_Cars +  diff_Unemployment + diff_log_AvgElectricityPrices + factor(COVID), data = final_ts_df)
+COVID_complete_lag_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Food + lag_diff_log_Food + diff_log_Housing  +  diff_log_Used_Cars +  diff_Unemployment+lag_diff_Unemployment + diff_log_AvgElectricityPrices + factor(COVID), data = final_ts_df)
 ```
 
 ```{r}
@@ -427,7 +428,7 @@ final_lag_fit_CPI <- lm( diff_log_CPI ~ diff_log_Energy + lag_diff_log_Energy + 
 ```{r}
 modelsummary(list(
   "final_CPI"=final_fit_CPI,
-  "final_CPI_w_lags"=final_lag_fit_CPI),estimate="{estimate}{stars}")
+  "final_CPI_w_lags"=final_lag_fit_CPI),estimate="{estimate}{stars}",output="table5.png")
 ```
 
 
@@ -454,7 +455,7 @@ Just to make sure, the PPI models are exactly the same to the respective CPI mod
 # complete_lag_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Food + lag_diff_log_Food + diff_log_Housing  +  diff_log_Used_Cars +  diff_Unemployment + diff_log_AvgElectricityPrices, data = final_ts_df)
 
 
-complete_PPI.leaps.cp <- leaps(y = final_ts_df$diff_log_PPI, x = final_ts_df[,c(11,14,21,24,26,29)], method = c("Cp"))
+complete_PPI.leaps.cp <- leaps(y = final_ts_df$diff_log_PPI, x = final_ts_df[,c(11,14,21,24,26,27,29)], method = c("Cp"))
 complete_PPI.full.cp <- cbind(complete_PPI.leaps.cp$which, complete_PPI.leaps.cp$Cp)
 complete_PPI.full.cp
 ```
@@ -462,7 +463,7 @@ complete_PPI.full.cp
 From the results above, the model that produces a Mallow's Cp closest to the number of predictor variables in the complete_PPI model (6) is the model(1 1 1 0 1 1   5.802378) that excludes diff_log_Used_Cars. However, going with the model that minimizes Mallow's Cp (1 1 1 0 1 0   3.822223) excludes diff_log_Used_Cars & diff_log_AvgElectricityPrices. 
 
 ```{r}
-complete_lag_PPI.leaps.cp <- leaps(y = final_ts_df$diff_log_PPI, x = final_ts_df[,c(11, 12, 14, 15, 21, 24,26, 29)], method = c("Cp"))
+complete_lag_PPI.leaps.cp <- leaps(y = final_ts_df$diff_log_PPI, x = final_ts_df[,c(11, 12, 14, 15, 21, 24,26,27, 29)], method = c("Cp"))
 complete_lag_PPI.full.cp <- cbind(complete_lag_PPI.leaps.cp$which, complete_lag_PPI.leaps.cp$Cp)
 complete_lag_PPI.full.cp
 ```
@@ -473,7 +474,7 @@ From the results above, the model that produces a Mallow's Cp closest to the num
 
 
 ```{r}
-complete_PPI.leaps.r <- leaps(y = final_ts_df$diff_log_PPI, x = final_ts_df[,c(11,14,21,24,26,29)], method = c("adjr2"))
+complete_PPI.leaps.r <- leaps(y = final_ts_df$diff_log_PPI, x = final_ts_df[,c(11,14,21,24,26,27,29)], method = c("adjr2"))
 complete_PPI.full.r <- cbind(complete_PPI.leaps.r$which, complete_PPI.leaps.r$adjr2)
 complete_PPI.full.r
 ```
@@ -481,7 +482,7 @@ complete_PPI.full.r
 So it seems that from the complete_fit_PPI model, based on getting the maximum Adjusted R-Squared value, the best model to go with is (1 1 1 0 1 0 0.54850982) which is the model that excludes diff_log_Used_Cars and diff_log_AvgElectricityPrices. 
 
 ```{r}
-complete_lag_PPI.leaps.r <- leaps(y = final_ts_df$diff_log_PPI, x = final_ts_df[,c(11, 12, 14, 15, 21, 24,26, 29)], method = c("adjr2"))
+complete_lag_PPI.leaps.r <- leaps(y = final_ts_df$diff_log_PPI, x = final_ts_df[,c(11, 12, 14, 15, 21, 24,26,27, 29)], method = c("adjr2"))
 complete_lag_PPI.full.r <- cbind(complete_lag_PPI.leaps.r$which, complete_lag_PPI.leaps.r$adjr2)
 complete_lag_PPI.full.r
 ```
@@ -508,13 +509,13 @@ From the above analysis on PPI, it seems like it might be appropriate to exclude
 ```{r}
 final_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy  + diff_log_Food + diff_log_Housing, data = final_ts_df)
 
-final_lag_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Food + lag_diff_log_Food + diff_log_Housing, data = final_ts_df)
+final_lag_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Food + lag_diff_log_Food + diff_log_Housing+lag_diff_Unemployment, data = final_ts_df)
 ```
 
 ```{r}
 modelsummary(list(
   "final_PPI"=final_fit_PPI,
-  "final_PPI_w_lags"=final_lag_fit_PPI),estimate="{estimate}{stars}")
+  "final_PPI_w_lags"=final_lag_fit_PPI),estimate="{estimate}{stars}",output="table6.png")
 ```
 
 
@@ -544,7 +545,7 @@ final_lag_fit_full_CPI <- dynlm( diff_log_CPI ~ diff_log_PPI+lag_diff_log_PPI+di
 modelsummary(list(
   "final_model_without_PPI"=final_lag_fit_CPI,
   "final_model_with_PPI"=final_lag_fit_full_CPI
-),estimate="{estimate}{stars}")
+),estimate="{estimate}{stars}",output="table7.png")
 ```
 ```{r,fig.width=10}
 par(mar = c(2,2,5,5))
@@ -560,6 +561,8 @@ acf(final_lag_fit_full_CPI$residuals,main="Model with PPI")
 We found that the energy prices currently and in the previous period, food prices currently and in the previous period, and housing prices are strong, positive correlated predictors for PPI. Energy prices and food prices make sense, given that they are common inputs for production processes. However, housing seems to be an anomalous predictor as there should be no reason why producers should care about housing prices, unless it affects their rent.
 
 We found that the energy prices currently and in the previous period, housing prices, used cars prices, PPI currently and in the previous period are positively correlated predictors for CPI. This makes sense as these are items that factor into the current calculation for CPI, while PPI factors indirectly because producers, facing higher costs, will pass on some/all of the costs to consumers, leading to price raises for purchased goods. However, the negative correlation with average electricity prices seems anomalous, as the intuition is in the opposite direction: higher electricity prices should feed through all processes that utilize electricity, leading to price increases across the board.
+
+Despite headlines of inflation being a result of COVID, we found no evidence of COVID being a variable that positively correlates with CPI and PPI.
 
 
 
