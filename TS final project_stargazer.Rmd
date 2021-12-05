@@ -370,7 +370,7 @@ complete_CPI.full.cp
 
 Seems like Mallow's Cp values will differ slightly every time that the function runs, but values will lead to the same conclusions outlined below and thereafter.
 
-From the results above, the model that produces a Mallow's Cp closest to the number of predictor variables in the complete_CPI model (6) is the model(1 0 1 1 1 1   6.664595) that excludes diff_log_food. However, going with the model that minimizes Mallow's Cp (1 0 1 1 0 1   4.686577) exludes diff_log_food & diff_Unemployment, which were both insignificant in the complete_fit_CPI model. So maybe we should see what a complete model without these predictor variables would look like? I'll go ahead and explore that later down below.
+From the results above, the model that produces a Mallow's Cp closest to the number of predictor variables in the complete_CPI model (6) is the model(1 0 1 1 1 1   6.664595) that excludes diff_log_food. However, going with the model that minimizes Mallow's Cp (1 0 1 1 0 1   4.686577) excludes diff_log_food & diff_Unemployment, which were both insignificant in the complete_fit_CPI model. So maybe we should see what a complete model without these predictor variables would look like? I'll go ahead and explore that later down below.
 
 ```{r}
 complete_lag_CPI.leaps.cp <- leaps(y = final_ts_df$diff_log_CPI, x = final_ts_df[,c(11, 12, 14, 15, 21, 24,26, 27, 29)], method = c("Cp"))
