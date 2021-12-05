@@ -11,6 +11,7 @@ knitr::opts_chunk$set(echo = TRUE, message=F,warning=F,fig.width=10)
 ## Necessary packages 
 
 ```{r}
+library(MASS) # for the stepAIC() function
 library(quantmod) # Extracting data
 library(tsibble)
 library(tidyverse)
@@ -20,6 +21,8 @@ library(aTSA)
 library(dynlm)
 library(car)
 library(sandwich)
+library(leaps) # for the leaps() function
+
 ```
 
 ## Extracting the data from FRED:
@@ -37,6 +40,9 @@ food=getSymbols('PFOODINDEXM',src='FRED',auto.assign=F)['1992-01-01/']
 food=food/food[[1]]*100
 used_cars=getSymbols('CUSR0000SETA02',src='FRED',auto.assign=F)['1992-01-01/']
 used_cars=used_cars/used_cars[[1]]*100
+
+housing=getSymbols('CPIHOSNS',src='FRED',auto.assign=F)['1992-01-01/']
+
 Unemployment=getSymbols('UNRATE',src='FRED',auto.assign=F)['1992-01-01/']
 Electricity_avg=getSymbols('APU000072610',src='FRED',auto.assign=F)['1992-01-01/']
 Electricity_avg=Electricity_avg/Electricity_avg[[1]]*100
@@ -188,7 +194,7 @@ Model Evaluation - CPI vs Housing and Used Cars
 ```{r}
 summary(lag_CPI_Housing_Used_Cars)
 plot(lag_CPI_Housing_Used_Cars)
-acf(lag_CPI_Hosuing_Used_Cars$residuals)
+acf(lag_CPI_Housing_Used_Cars$residuals)
 linearHypothesis(lag_CPI_Housing_Used_Cars,c("lag_12_diff_log_Housing=0","lag_diff_log_Used_Cars=0"),vcov=vcovHAC)
 ```
 
@@ -248,6 +254,24 @@ linearHypothesis(lag_PPI_Unemployment_AvgElectricityPrices,c("lag_4_diff_log_Avg
 
 For Unemployment Rate and Average Electricity Prices, lags do not add any explanatory effect.
 
+
+## At this point, I will go ahead and insert Intervention term for COVID starting MARCH 2020
+
+```{r}
+# Something like this but for COVID
+COVID <- c(seq(0, 0, length.out = 338), seq(1, 1, length.out = 21))
+final_ts_df['COVID']=as.data.frame(COVID)
+```
+
+I will rerun the models having removed observations with NAs so that my model selection functions later down below can work. This will ultimately only remove 2 rows.
+
+```{r}
+# Here I will set the new final_ts_df object to only include non-NA having rows
+final_ts_df <- final_ts_df[c(-1,-2),]
+```
+
+
+
 ## Final model
 We fit a model using all six variables with no lags, and the same model but including the first lags for Energy and Food Price as determined above.
 
@@ -275,6 +299,32 @@ AIC(complete_fit_CPI)
 AIC(complete_lag_fit_CPI)
 ```
 
+## For CPI w/ COVID Included
+
+```{r}
+COVID_complete_fit_CPI <- lm( diff_log_CPI ~ diff_log_Energy  + diff_log_Food + diff_log_Housing +   diff_log_Used_Cars + diff_Unemployment + diff_log_AvgElectricityPrices + factor(COVID), data = final_ts_df)
+
+COVID_complete_lag_fit_CPI <- lm( diff_log_CPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Food + lag_diff_log_Food + diff_log_Housing  +  diff_log_Used_Cars +  diff_Unemployment + lag_diff_Unemployment + diff_log_AvgElectricityPrices + factor(COVID), data = final_ts_df)
+```
+
+```{r,fig.height=10,fig.width=10}
+par(mar = c(2,2,5,5))
+par(mfrow=c(2,2))
+plot(COVID_complete_fit_CPI,which=c(1))
+plot(COVID_complete_lag_fit_CPI,which=c(1))
+acf(COVID_complete_fit_CPI$residuals)
+acf(COVID_complete_lag_fit_CPI$residuals)
+```
+
+
+```{r}
+summary(COVID_complete_fit_CPI)
+summary(COVID_complete_lag_fit_CPI)
+AIC(COVID_complete_fit_CPI)
+AIC(COVID_complete_lag_fit_CPI)
+```
+
+COVID doesn't seem to play a significant role for CPI model.
 
 ### FOr PPI
 ```{r}
@@ -303,3 +353,220 @@ vif(complete_lag_fit_CPI)
 vif(complete_lag_fit_PPI)
 
 ```
+
+## For PPI w/ COVID Included
+
+```{r}
+COVID_complete_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy  + diff_log_Food + diff_log_Housing +   diff_log_Used_Cars + diff_Unemployment + diff_log_AvgElectricityPrices + factor(COVID), data = final_ts_df)
+
+COVID_complete_lag_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Food + lag_diff_log_Food + diff_log_Housing  +  diff_log_Used_Cars +  diff_Unemployment + diff_log_AvgElectricityPrices + factor(COVID), data = final_ts_df)
+```
+
+```{r,fig.height=10,fig.width=10}
+par(mar = c(2,2,5,5))
+par(mfrow=c(2,2))
+plot(COVID_complete_fit_PPI,which=c(1))
+plot(COVID_complete_lag_fit_PPI,which=c(1))
+acf(COVID_complete_fit_PPI$residuals)
+acf(COVID_complete_lag_fit_PPI$residuals)
+```
+```{r}
+summary(COVID_complete_fit_PPI)
+summary(COVID_complete_lag_fit_PPI)
+AIC(COVID_complete_fit_PPI)
+AIC(COVID_complete_lag_fit_PPI)
+```
+
+COVID does not play significant role in PPI model either. 
+
+## Model Selection based on leaps() & stepAIC()
+
+Since including COVID in the CPI or PPI model does not produce statistically significant coefficient estimates, I will go ahead and only evaluate the complete models without the COVID intervention term.
+
+The Leaps below is based on Mallow's Cp which measures predictive ability of a fitted model. Good models have a small Mallow's Cp value  and a value close to the number of predictor variables in the model
+
+### CPI Model Selection
+
+```{r}
+
+# Just included models commented out for my own purposes.
+
+# complete_fit_CPI <- lm( diff_log_CPI ~ diff_log_Energy  + diff_log_Food + diff_log_Housing +   diff_log_Used_Cars + diff_Unemployment + diff_log_AvgElectricityPrices, data = final_ts_df)
+# 
+# complete_lag_fit_CPI <- lm( diff_log_CPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Food + lag_diff_log_Food + diff_log_Housing  +  diff_log_Used_Cars +  diff_Unemployment + lag_diff_Unemployment + diff_log_AvgElectricityPrices, data = final_ts_df)
+
+
+
+complete_CPI.leaps.cp <- leaps(y = final_ts_df$diff_log_CPI, x = final_ts_df[,c(11,14,21,24,26,29)], method = c("Cp"))
+complete_CPI.full.cp <- cbind(complete_CPI.leaps.cp$which, complete_CPI.leaps.cp$Cp)
+complete_CPI.full.cp
+```
+
+Seems like Mallow's Cp values will differ slightly every time that the function runs, but values will lead to the same conclusions outlined below and thereafter.
+
+From the results above, the model that produces a Mallow's Cp closest to the number of predictor variables in the complete_CPI model (6) is the model(1 0 1 1 1 1   6.664595) that excludes diff_log_food. However, going with the model that minimizes Mallow's Cp (1 0 1 1 0 1   4.686577) exludes diff_log_food & diff_Unemployment, which were both insignificant in the complete_fit_CPI model. So maybe we should see what a complete model without these predictor variables would look like? I'll go ahead and explore that later down below.
+
+```{r}
+complete_lag_CPI.leaps.cp <- leaps(y = final_ts_df$diff_log_CPI, x = final_ts_df[,c(11, 12, 14, 15, 21, 24,26, 27, 29)], method = c("Cp"))
+complete_lag_CPI.full.cp <- cbind(complete_lag_CPI.leaps.cp$which, complete_lag_CPI.leaps.cp$Cp)
+complete_lag_CPI.full.cp
+```
+
+From the results above, the model that produces a Mallow's Cp closest to the number of predictor variables in the complete_lag_fit_CPI model (9) is the model(1 1 0 1 1 1 1 1 1   9.179419) that excludes diff_log_food. However, going with the model that minimizes Mallow's Cp (1 1 0 1 1 1 1 0 1   7.255232) excludes diff_log_food & lag_diff_Unemployment, which were both insignificant in the complete_lag_fit_CPI model. 
+
+
+Now down below, I will go ahead and run the same function but the metric will now be Adjusted R-Squared, so we ultimately want to choose a model based on the LARGEST Adjusted R-Squared (this selection will only really be valid if we're working off the basis that the OLS assumptions are justified btw).
+
+```{r}
+complete_CPI.leaps.r <- leaps(y = final_ts_df$diff_log_CPI, x = final_ts_df[,c(11,14,21,24,26,29)], method = c("adjr2"))
+complete_CPI.full.r <- cbind(complete_CPI.leaps.r$which, complete_CPI.leaps.r$adjr2)
+complete_CPI.full.r
+```
+
+So it seems that from the complete_fit_CPI model, based on getting the maximum Adjusted R-Squared value, the best model to go with is (1 1 1 1 0 1 0.43868042) which is the model that excludes diff_Unemployment. 
+
+```{r}
+complete_lag_CPI.leaps.r <- leaps(y = final_ts_df$diff_log_CPI, x = final_ts_df[,c(11, 12, 14, 15, 21, 24,26, 27, 29)], method = c("adjr2"))
+complete_lag_CPI.full.r <- cbind(complete_lag_CPI.leaps.r$which, complete_lag_CPI.leaps.r$adjr2)
+complete_lag_CPI.full.r
+```
+
+From the complete_lag_fit_CPI, the model that achieves the largest adjusted R-squared value would be (1 1 1 1 1 1 1 0 1 0.573446674) which exludes lag_diff_unemployment.
+
+
+Now below I will go ahead and run the stepAIC() function on both CPI models to look at how a backtrace from the full model affects the AIC and then look at which models produce the best AIC.
+
+```{r}
+stepAIC(complete_fit_CPI, direction = "backward")
+```
+
+From the results above, it looks like excluding diff_Unemployment & diff_log_food from complete_fit_CPI produces the model with the lowest AIC value of AIC=-4304.84
+
+```{r}
+stepAIC(complete_lag_fit_CPI, direction = "backward")
+```
+
+Running the same function on the complete_lag_fit_CPI model tells us that excluding lag_diff_unemployment & diff_log_food would be the model with the lowest AIC of -4398.77
+
+From Running a Leaps based on Mallow's Cp, Ajusted R-Squared, & the stepAIC function, it seems clear that we should remove any Food & Unemployment related predictor variables from the full model in order to get a model that maximizes how much variability can be explained by the data and a model that has the best predictive capability. I will go ahead and run what could be a "Final" CPI model based on the results above.
+
+## "Final" CPI Model: w/ & w/o relevant lags
+
+```{r}
+final_fit_CPI <- lm( diff_log_CPI ~ diff_log_Energy  +  diff_log_Housing +   diff_log_Used_Cars +  diff_log_AvgElectricityPrices, data = final_ts_df)
+
+final_lag_fit_CPI <- lm( diff_log_CPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Housing  +  diff_log_Used_Cars + diff_log_AvgElectricityPrices, data = final_ts_df)
+```
+
+```{r,fig.height=10,fig.width=10}
+par(mar = c(2,2,5,5))
+par(mfrow=c(2,2))
+plot(final_fit_CPI,which=c(1))
+plot(final_lag_fit_CPI,which=c(1))
+acf(final_fit_CPI$residuals)
+acf(final_lag_fit_CPI$residuals)
+```
+
+
+```{r}
+summary(final_fit_CPI)
+summary(final_lag_fit_CPI)
+AIC(final_fit_CPI)
+AIC(final_lag_fit_CPI)
+```
+
+From running what could be the "final" CPI models, including & excluding relevant lagged variables, it seems that the complete model without lags has a better AIC score with marginally better or similar other metric (Residual standard error, Adjusted R-Squared, etc.) values. However, the initial complete_lag_fit_CPI that includes food and unemployment related variables has a marginally better AIC, but I think this is simply due to inclusion of a higher number of predictor variables NOT the inclusion of important/significant predictor variables. Ultimately, I would argue that the above final CPI models would be preferable. 
+
+
+## Now to do the exact same thing for the PPI Models
+### PPI Model Selection
+
+Just to make sure, the PPI models are exactly the same to the respective CPI models with the exception of the complete_lag_fit_PPI model. Whereas complete_lag_fit_CPI includes lag_diff_unemployment, complete_lag_fit_PPI does not. This will ultimately change the criteria for analyzing the results from the leaps() output slightly (as there is one less predictor variable..
+
+```{r}
+# complete_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy  + diff_log_Food + diff_log_Housing +   diff_log_Used_Cars + diff_Unemployment + diff_log_AvgElectricityPrices, data = final_ts_df)
+# 
+# complete_lag_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Food + lag_diff_log_Food + diff_log_Housing  +  diff_log_Used_Cars +  diff_Unemployment + diff_log_AvgElectricityPrices, data = final_ts_df)
+
+
+complete_PPI.leaps.cp <- leaps(y = final_ts_df$diff_log_PPI, x = final_ts_df[,c(11,14,21,24,26,29)], method = c("Cp"))
+complete_PPI.full.cp <- cbind(complete_PPI.leaps.cp$which, complete_PPI.leaps.cp$Cp)
+complete_PPI.full.cp
+```
+
+From the results above, the model that produces a Mallow's Cp closest to the number of predictor variables in the complete_PPI model (6) is the model(1 1 1 0 1 1   5.802378) that excludes diff_log_Used_Cars. However, going with the model that minimizes Mallow's Cp (1 1 1 0 1 0   3.822223) excludes diff_log_Used_Cars & diff_log_AvgElectricityPrices. 
+
+```{r}
+complete_lag_PPI.leaps.cp <- leaps(y = final_ts_df$diff_log_PPI, x = final_ts_df[,c(11, 12, 14, 15, 21, 24,26, 29)], method = c("Cp"))
+complete_lag_PPI.full.cp <- cbind(complete_lag_PPI.leaps.cp$which, complete_lag_PPI.leaps.cp$Cp)
+complete_lag_PPI.full.cp
+```
+
+From the results above, the model that produces a Mallow's Cp closest to the number of predictor variables in the complete_lag_fit_PPI model (8) is the model(1 1 1 1 1 0 1 1   7.538150) that excludes diff_log_Used_Cars. However, going with the model that minimizes Mallow's Cp (1 1 1 1 1 0 0 0   4.152958) excludes diff_log_Used_Cars, diff_Unemployment, & diff_log_AvgElectricityPrices.
+
+
+
+
+```{r}
+complete_PPI.leaps.r <- leaps(y = final_ts_df$diff_log_PPI, x = final_ts_df[,c(11,14,21,24,26,29)], method = c("adjr2"))
+complete_PPI.full.r <- cbind(complete_PPI.leaps.r$which, complete_PPI.leaps.r$adjr2)
+complete_PPI.full.r
+```
+
+So it seems that from the complete_fit_PPI model, based on getting the maximum Adjusted R-Squared value, the best model to go with is (1 1 1 0 1 0 0.54850982) which is the model that excludes diff_log_Used_Cars and diff_log_AvgElectricityPrices. 
+
+```{r}
+complete_lag_PPI.leaps.r <- leaps(y = final_ts_df$diff_log_PPI, x = final_ts_df[,c(11, 12, 14, 15, 21, 24,26, 29)], method = c("adjr2"))
+complete_lag_PPI.full.r <- cbind(complete_lag_PPI.leaps.r$which, complete_lag_PPI.leaps.r$adjr2)
+complete_lag_PPI.full.r
+```
+
+From the complete_lag_fit_PPI, the model that achieves the largest adjusted R-squared value would be (1 1 1 1 1 0 0 0 0.58475515) which excludes diff_log_Used_Cars, diff_Unemployment, diff_log_AvgElectricityPrices.
+
+```{r}
+stepAIC(complete_fit_PPI, direction = "backward")
+```
+
+From the results above, it looks like excluding diff_log_AvgElectricityPrices & diff_log_Used_Cars from complete_fit_PPI produces the model with the lowest AIC value of AIC=-3501.28
+
+```{r}
+stepAIC(complete_lag_fit_PPI, direction = "backward")
+```
+
+Running the same function on the complete_lag_fit_PPI model tells us that excluding diff_log_AvgElectricityPrices, diff_unemployment & diff_log_Used_Cars would be the model with the lowest AIC of AIC=-3529.34
+
+
+From the above analysis on PPI, it seems like it might be appropriate to exclude all predictor variables related to Used Cars, Unemployment, & Average electricity prices. With this in mind, I will go ahead and build what could be considered a "final" PPI model w/ & w/o relevant lags. 
+
+## "Final" PPI Models
+
+```{r}
+final_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy  + diff_log_Food + diff_log_Housing, data = final_ts_df)
+
+final_lag_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Food + lag_diff_log_Food + diff_log_Housing, data = final_ts_df)
+```
+
+```{r,fig.height=10,fig.width=10}
+par(mar = c(2,2,5,5))
+par(mfrow=c(2,2))
+plot(final_fit_PPI,which=c(1))
+plot(final_lag_fit_PPI,which=c(1))
+acf(final_fit_PPI$residuals)
+acf(final_lag_fit_PPI$residuals)
+```
+```{r}
+summary(final_fit_PPI)
+summary(final_lag_fit_PPI)
+AIC(final_fit_PPI)
+AIC(final_lag_fit_PPI)
+```
+
+Both of these final models have a better AIC than the initial ones. They also have marginally better Residual Standard Errors & Adjusted R-Squared.
+
+
+
+
+
+
+
+
