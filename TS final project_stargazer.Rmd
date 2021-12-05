@@ -1,8 +1,8 @@
 ---
 title: "FRED inflation"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -301,7 +301,7 @@ ppi_models=list(
   "ppi"=complete_fit_PPI,
   "ppi_lag"=complete_lag_fit_PPI
 )
-modelsummary(covid_ppi_models,estimate="{estimate}{stars}")
+modelsummary(ppi_models,estimate="{estimate}{stars}")
 ```
 
 
