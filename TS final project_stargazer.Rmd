@@ -220,8 +220,6 @@ modelsummary(ppi_models,estimate="{estimate}{stars}")
 For PPI, we determine that Energy and Food are significant up to their first lags based on their coefficients. Additioanlly, unemployment rate is also significant for PPI up to the first lag.
 
 
-
-
 ## At this point, I will go ahead and insert Intervention term for COVID starting MARCH 2020
 
 ```{r}
@@ -236,7 +234,6 @@ I will rerun the models having removed observations with NAs so that my model se
 # Here I will set the new final_ts_df object to only include non-NA having rows
 final_ts_df <- final_ts_df[c(-1,-2),]
 ```
-
 
 
 ## Final model
@@ -273,6 +270,14 @@ COVID_complete_fit_CPI <- lm( diff_log_CPI ~ diff_log_Energy  + diff_log_Food + 
 COVID_complete_lag_fit_CPI <- lm( diff_log_CPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Food + lag_diff_log_Food + diff_log_Housing  +  diff_log_Used_Cars +  diff_Unemployment + lag_diff_Unemployment + diff_log_AvgElectricityPrices + factor(COVID), data = final_ts_df)
 ```
 
+```{r}
+covid_cpi_models=list(
+  "cpi_covid"=COVID_complete_fit_CPI,
+  "cpi_covid_lag"=COVID_complete_lag_fit_CPI
+)
+modelsummary(covid_cpi_models,estimate="{estimate}{stars}")
+```
+
 ```{r,fig.height=10,fig.width=10}
 par(mar = c(2,2,5,5))
 par(mfrow=c(2,2))
@@ -280,12 +285,6 @@ plot(COVID_complete_fit_CPI,which=c(1))
 plot(COVID_complete_lag_fit_CPI,which=c(1))
 acf(COVID_complete_fit_CPI$residuals,main="Full CPI model with COVID")
 acf(COVID_complete_lag_fit_CPI$residuals,main="Full CPI model with lags and COVID")
-```
-
-
-```{r}
-summary(COVID_complete_fit_CPI)
-summary(COVID_complete_lag_fit_CPI)
 ```
 
 COVID doesn't seem to play a significant role for CPI model.
@@ -297,20 +296,22 @@ complete_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy  + diff_log_Food + diff_l
 complete_lag_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Food + lag_diff_log_Food + diff_log_Housing  +  diff_log_Used_Cars +  diff_Unemployment + diff_log_AvgElectricityPrices, data = final_ts_df)
 ```
 
+```{r}
+ppi_models=list(
+  "ppi"=complete_fit_PPI,
+  "ppi_lag"=complete_lag_fit_PPI
+)
+modelsummary(covid_ppi_models,estimate="{estimate}{stars}")
+```
+
+
 ```{r,fig.height=10,fig.width=10}
 par(mar = c(2,2,5,5))
 par(mfrow=c(2,2))
 plot(complete_fit_PPI,which=c(1))
 plot(complete_lag_fit_PPI,which=c(1))
-acf(complete_fit_PPI$residuals)
-acf(complete_lag_fit_PPI$residuals)
-```
-
-```{r}
-summary(complete_fit_PPI)
-summary(complete_lag_fit_PPI)
-AIC(complete_fit_PPI)
-AIC(complete_lag_fit_PPI)
+acf(complete_fit_PPI$residuals,main="Full PPI model")
+acf(complete_lag_fit_PPI$residuals,main="Full PPI model with lags")
 ```
 
 ```{r}
@@ -326,20 +327,22 @@ COVID_complete_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy  + diff_log_Food + 
 COVID_complete_lag_fit_PPI <- lm( diff_log_PPI ~ diff_log_Energy + lag_diff_log_Energy + diff_log_Food + lag_diff_log_Food + diff_log_Housing  +  diff_log_Used_Cars +  diff_Unemployment + diff_log_AvgElectricityPrices + factor(COVID), data = final_ts_df)
 ```
 
+```{r}
+covid_ppi_models=list(
+  "ppi_covid"=COVID_complete_fit_PPI,
+  "ppi_covid_lag"=COVID_complete_lag_fit_PPI
+)
+modelsummary(covid_ppi_models,estimate="{estimate}{stars}")
+```
+
+
 ```{r,fig.height=10,fig.width=10}
 par(mar = c(2,2,5,5))
 par(mfrow=c(2,2))
 plot(COVID_complete_fit_PPI,which=c(1))
 plot(COVID_complete_lag_fit_PPI,which=c(1))
-acf(COVID_complete_fit_PPI$residuals)
-acf(COVID_complete_lag_fit_PPI$residuals)
-```
-
-```{r}
-summary(COVID_complete_fit_PPI)
-summary(COVID_complete_lag_fit_PPI)
-AIC(COVID_complete_fit_PPI)
-AIC(COVID_complete_lag_fit_PPI)
+acf(COVID_complete_fit_PPI$residuals,main="Full PPI model with COVID")
+acf(COVID_complete_lag_fit_PPI$residuals,main="Full PPI model with lags and COVID")
 ```
 
 COVID does not play significant role in PPI model either. 
